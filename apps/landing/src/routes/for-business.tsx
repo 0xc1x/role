@@ -83,7 +83,7 @@ function ForBusinessPage() {
 	// y sin esto el primer render publicaría el "—" de un dato que el servidor sí
 	// resolvió. Ver la tabla de los cuatro casos en `use-config.ts`.
 	const statsData = usePlatformStats(Route.useLoaderData());
-	const salesEmail = useConfig("contact.negocios_email", "negocios@role.app");
+	const salesEmail = useConfig("contact.negocios_email", "negocios@role.ec");
 	const animatedExtraRevenue = useCountUp(12);
 	const animatedBusinesses = useCountUp(statsData.data?.businesses);
 	const animatedTimeToStart = useCountUp(24);

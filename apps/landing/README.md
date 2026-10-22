@@ -8,7 +8,7 @@ del admin).
 
 - Páginas públicas indexables (SSR — la web SEO-critical NO va a Expo web).
 - Flujo de negocio: CTA a `role://business-signup` (deep link a la app) + contacto
-  `mailto:negocios@role.app`.
+  `mailto:negocios@role.ec`.
 - Verificación: la hace el admin vía `apps/api` (módulo businesses) + `apps/admin`;
   el móvil/landing leen estado por RLS.
 

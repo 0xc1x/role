@@ -125,9 +125,10 @@ test.describe("SEO metadata per route", () => {
 			// El canonical tiene que ser ABSOLUTO y tiene que ser EL DE ESTE
 			// ENTORNO. Antes la aserción era `/href="https:\/\/[^"]+"/`, que
 			// aceptaba cualquier cosa: una suite que anunciaba `https://role.app`
-			// desde `127.0.0.1:3101` pasaba igual, y ese es exactamente el defecto
-			// —el canonical del dominio equivocado es lo que desindexa un sitio,
-			// y no se ve mirando la página que se está probando.
+			// —el dominio viejo— desde `127.0.0.1:3101` pasaba igual, y ese es
+			// exactamente el defecto —el canonical del dominio equivocado es lo
+			// que desindexa un sitio, y no se ve mirando la página que se está
+			// probando.
 			expect(html).toContain(
 				`<link rel="canonical" href="${SITE_URL}${route.path}"/>`,
 			);

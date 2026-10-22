@@ -23,7 +23,7 @@ import { describe, expect, test } from "bun:test";
 // `getSiteUrl()` tiraría. Se fija antes del import —los imports de ESM se
 // evalúan antes que el cuerpo del módulo— y por eso es un `await import()` y no
 // un `import` estático.
-process.env.VITE_SITE_URL = "https://role.app";
+process.env.VITE_SITE_URL = "https://role.ec";
 
 const { organizationJsonLd } = await import("../seo");
 const { LAUNCH_CITIES } = await import("../faq");
@@ -67,8 +67,8 @@ describe("organizationJsonLd", () => {
 		// El mismo guard que ya se aplica al canonical: un `logo` relativo no lo
 		// puede leer un crawler, y uno del dominio equivocado apunta a otro sitio.
 		const ld = organizationJsonLd();
-		expect(ld.url).toBe("https://role.app/");
-		expect(ld.logo).toBe("https://role.app/icon.svg");
+		expect(ld.url).toBe("https://role.ec/");
+		expect(ld.logo).toBe("https://role.ec/icon.svg");
 	});
 
 	test("el type y el context siguen siendo los que espera schema.org", () => {

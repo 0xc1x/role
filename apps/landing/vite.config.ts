@@ -16,7 +16,7 @@ import { resolveSeoSiteUrl, siteUrlStartupError } from "./src/lib/site-url.ts";
  * Genera robots.txt y sitemap.xml en publicDir al construir: nitro copia esa
  * carpeta a .output/public y también quedan servidos en dev. El dominio viene
  * de VITE_SITE_URL o de VERCEL_PROJECT_PRODUCTION_URL (Vercel la inyecta en
- * build); sin dominio se usa https://role.app como fallback con un warning
+ * build); sin dominio se usa https://role.ec como fallback con un warning
  * ruidoso. El fallback es solo del BUILD: el server construido no arranca sin la
  * var (`env.ts`), así que un sitemap con el origen de respaldo nunca llega a un
  * sitio en producción.
@@ -46,7 +46,7 @@ function seoFiles(): Plugin {
 			const site = resolveSeoSiteUrl(raw);
 			if (!raw?.trim()) {
 				console.warn(
-					"[seo] falta VITE_SITE_URL/VERCEL_PROJECT_PRODUCTION_URL: usando fallback https://role.app para robots.txt y sitemap.xml",
+					"[seo] falta VITE_SITE_URL/VERCEL_PROJECT_PRODUCTION_URL: usando fallback https://role.ec para robots.txt y sitemap.xml",
 				);
 			}
 

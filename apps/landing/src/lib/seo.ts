@@ -4,13 +4,13 @@
  * EL ORIGEN NO SE ADIVINA. Viene de VITE_SITE_URL o, en Vercel, de
  * VERCEL_PROJECT_PRODUCTION_URL (Vercel la inyecta en build y en runtime), y si
  * no hay ninguno el server NO ARRANCA: `env.ts` valida la var al importar el
- * bundle SSR y tira. Antes este módulo caía a `https://role.app` con un
- * `console.warn`, y el resultado medido era un deploy de otro dominio sirviendo
- * canonicals, og:url y sitemap del de producción — el sitio entero fuera del
- * índice, con la única señal en un log que nadie lee. Para un default así, no
- * arrancar es más barato que arrancar mal: ver el razonamiento de
- * `VITE_API_URL` en `api-url.ts`, que es el mismo problema con la misma
- * solución.
+ * bundle SSR y tira. Antes este módulo caía a `https://role.app` —el dominio
+ * viejo, anterior a la adquisición; hoy es `role.ec`— con un `console.warn`, y
+ * el resultado medido era un deploy de otro dominio sirviendo canonicals,
+ * og:url y sitemap del de producción — el sitio entero fuera del índice, con la
+ * única señal en un log que nadie lee. Para un default así, no arrancar es más
+ * barato que arrancar mal: ver el razonamiento de `VITE_API_URL` en
+ * `api-url.ts`, que es el mismo problema con la misma solución.
  *
  * La normalización vive en `site-url.ts`, el mismo módulo que usa
  * `seo-files.ts` para el sitemap. Que sea uno solo es lo que garantiza que

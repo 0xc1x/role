@@ -5,8 +5,9 @@
  * `public/sitemap.xml` están en `.gitignore` y el plugin `seoFiles` de
  * `vite.config.ts` los reescribe en cada build. La razón de que sean
  * generados y no estáticos es que cada deploy tiene que anunciar SU origen: un
- * sitemap commiteado con `https://role.app` hace que todos los previews de
- * Vercel y los entornos de staging le digan al mundo que son producción.
+ * sitemap commiteado con `https://role.app` —el dominio viejo, anterior a la
+ * adquisición; hoy es `role.ec`— hace que todos los previews de Vercel y los
+ * entornos de staging le digan al mundo que son producción.
  *
  * La lógica pura vive acá, y no en el closure del plugin de Vite, para que sea
  * verificable: `bun test src` no puede importar `vite.config.ts` sin arrastrar
@@ -17,9 +18,9 @@
  * `site-url.ts`, el mismo módulo que usa `seo.ts` para el canonical. Antes cada
  * uno tenía su normalizador y no coincidían —este conservaba el path
  * configurado, `seo.ts` lo descartaba con `.origin`—, así que con
- * `VITE_SITE_URL=https://role.app/es` el sitemap anunciaba
- * `https://role.app/es/about` y el canonical de esa misma página
- * `https://role.app/about`: dos orígenes para el mismo contenido. La
+ * `VITE_SITE_URL=https://role.ec/es` el sitemap anunciaba
+ * `https://role.ec/es/about` y el canonical de esa misma página
+ * `https://role.ec/about`: dos orígenes para el mismo contenido. La
  * normalización vive en un lugar porque no puede haber dos respuestas.
  */
 

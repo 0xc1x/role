@@ -6,19 +6,20 @@
  *
  *  1. `seo.ts` normalizaba con `new URL(x).origin` — DESCARTABA el path.
  *  2. `seo-files.ts` normalizaba con un replace — CONSERVABA el path.
- *  3. `seo.ts`ava de `https://role.app` si la var faltaba, avisando por
+ *  3. `seo.ts` caía a `https://role.app` —el dominio viejo, anterior a la
+ *     adquisición; hoy es `role.ec`— si la var faltaba, avisando por
  *     `console.warn`; `env.ts` hacía THROW por la misma clase de ausencia en
  *     `VITE_API_URL`.
  *
- * Con `VITE_SITE_URL=https://role.app/es`, el canonical de `/about` salía
- * `https://role.app/about` y el sitemap `https://role.app/es/about`: dos
+ * Con `VITE_SITE_URL=https://role.ec/es`, el canonical de `/about` salía
+ * `https://role.ec/about` y el sitemap `https://role.ec/es/about`: dos
  * orígenes para el mismo contenido, y el buscador expelled una mitad del sitio.
  *
  * Y lo que es peor: la var que decide si el sitio es indexable no tenía modo de
  * fallo. Sin ella, el server arrancaba perfecto y servía canonicals del dominio
  * de otro — medido: `[seo] falta VITE_SITE_URL` y a continuación canonicals de
- * `https://role.app` en un deploy de otro dominio. Un warning en un log es la
- * forma más cara de no enterarse.
+ * `https://role.app` —el dominio viejo, el que caía por defecto— en un deploy
+ * de otro dominio. Un warning en un log es la forma más cara de no enterarse.
  *
  * Acá vive la política, sin `import.meta.env`, para que la compartan el arranque
  * del dev server (`vite.config.ts`) y el bundle SSR (`env.ts`) y para que
@@ -44,31 +45,32 @@ describe("resolveSiteUrl: un origen, siempre", () => {
 	});
 
 	test("acepta un host pelado, como lo inyecta Vercel", () => {
-		expect(resolveSiteUrl("role.app")).toBe("https://role.app");
+		expect(resolveSiteUrl("role.ec")).toBe("https://role.ec");
 		expect(resolveSiteUrl("role-git-main-acme.vercel.app")).toBe(
 			"https://role-git-main-acme.vercel.app",
 		);
 	});
 
 	test("quita la barra final", () => {
-		expect(resolveSiteUrl("https://role.app/")).toBe("https://role.app");
-		expect(resolveSiteUrl("https://role.app///")).toBe("https://role.app");
+		expect(resolveSiteUrl("https://role.ec/")).toBe("https://role.ec");
+		expect(resolveSiteUrl("https://role.ec///")).toBe("https://role.ec");
 	});
 
 	test("DESCARTA el path: canonical y sitemap tienen que coincidir", () => {
 		// La regresión exacta. `/es` no significa nada para esta app —el router
 		// no tiene basepath y `absoluteUrl()` concatena origen + ruta—, así que
 		// lo único honesto es mirar el origen. Un sitemap en
-		// `https://role.app/es/about` y un canonical en
-		// `https://role.app/about` le dicen al buscador que hay dos sitios.
-		expect(resolveSiteUrl("https://role.app/es")).toBe("https://role.app");
-		expect(resolveSiteUrl("https://role.app/es/")).toBe("https://role.app");
+		// `https://role.ec/es/about` y un canonical en
+		// `https://role.ec/about` le dicen al buscador que hay dos sitios.
+		expect(resolveSiteUrl("https://role.ec/es")).toBe("https://role.ec");
+		expect(resolveSiteUrl("https://role.ec/es/")).toBe("https://role.ec");
 	});
 
 	test("acepta un puerto, para el loopback de la suite e2e", () => {
 		// El regex anterior (`/^[a-z0-9.-]+\.[a-z]{2,}$/i`) no aceptaba `:`,
 		// así que `localhost:3001` caía al fallback de producción: el dev server
-		// anunciaba `https://role.app` como su propia identidad.
+		// anunciaba `https://role.app` —el dominio viejo, el que caía por
+		// defecto— como su propia identidad.
 		expect(resolveSiteUrl("http://127.0.0.1:3101")).toBe(
 			"http://127.0.0.1:3101",
 		);
@@ -78,7 +80,7 @@ describe("resolveSiteUrl: un origen, siempre", () => {
 	test("sin dominio devuelve undefined, NO un origen inventado", () => {
 		// La ausencia tiene que ser DISTINGUIBLE de un valor. Con un fallback
 		// adentro, `siteUrlStartupError` no puede differentiates: `""`,
-		// `undefined` y `"role.app"` darían los tres un string truthy.
+		// `undefined` y `"role.ec"` darían los tres un string truthy.
 		expect(resolveSiteUrl(undefined)).toBeUndefined();
 		expect(resolveSiteUrl("")).toBeUndefined();
 		expect(resolveSiteUrl("   ")).toBeUndefined();
@@ -120,8 +122,8 @@ describe("resolveSeoSiteUrl: el mismo normalizador, con fallback para el build",
 		const CASES: readonly [raw: string, expected: string][] = [
 			[PREVIEW, PREVIEW],
 			[STAGING, STAGING],
-			["role.app", "https://role.app"],
-			["https://role.app/es", "https://role.app"],
+			["role.ec", "https://role.ec"],
+			["https://role.ec/es", "https://role.ec"],
 			["http://127.0.0.1:3101", "http://127.0.0.1:3101"],
 		];
 		for (const [raw, expected] of CASES) {

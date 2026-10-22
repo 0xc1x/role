@@ -2,6 +2,7 @@
  * `robots.txt` y `sitemap.xml` se generan en build; no son fuentes.
  *
  * El defecto que esto cubre: ambos archivos commiteados con `https://role.app`
+ * —el dominio viejo, anterior a la adquisición; hoy es `role.ec`—
  * hardcodeado hacen que cada preview de Vercel y cada staging le anuncien al
  * mundo que son producción, y que el sitemap no pueda seguir la variable de
  * entorno que el resto del sitio sí respeta.
@@ -22,24 +23,25 @@ describe("el sitemap y el canonical no pueden anunciar sitios distintos", () => 
 	// `seo-files.ts` no normaliza el dominio: usa el MISMO normalizador que
 	// `seo.ts` (ver `site-url.ts`). Antes cada módulo tenía el suyo y no
 	// coincidían — `seo.ts` descartaba el path con `.origin` y `seo-files.ts` lo
-	// conservaba—, así que con `VITE_SITE_URL=https://role.app/es` el sitemap era
-	// `https://role.app/es/about` mientras el canonical de esa misma página era
-	// `https://role.app/about`. Estos dos tests son la afirmación de ese
+	// conservaba—, así que con `VITE_SITE_URL=https://role.ec/es` el sitemap era
+	// `https://role.ec/es/about` mientras el canonical de esa misma página era
+	// `https://role.ec/about`. Estos dos tests son la afirmación de ese
 	// invariante; el normalizador en sí está en `site-url.test.ts`.
 	test("un path en la configuración no sobrevive en el sitemap", () => {
-		const site = resolveSeoSiteUrl("https://role.app/es");
-		expect(site).toBe("https://role.app");
+		const site = resolveSeoSiteUrl("https://role.ec/es");
+		expect(site).toBe("https://role.ec");
 		const sitemap = buildSitemapXml(site);
 		for (const route of INDEXABLE_ROUTES) {
-			expect(sitemap).toContain(`<loc>https://role.app${route}</loc>`);
+			expect(sitemap).toContain(`<loc>https://role.ec${route}</loc>`);
 		}
-		expect(sitemap).not.toContain("https://role.app/es");
+		expect(sitemap).not.toContain("https://role.ec/es");
 	});
 
 	test("con puerto y loopback, sitemap y canonical coinciden", () => {
 		// La suite e2e sirve en `127.0.0.1:3101`. Antes el regex de `seo.ts`
 		// rechazaba el puerto y caía al origen de producción, así que la página
-		// bajo prueba anunciaba `https://role.app` como su propia identidad.
+		// bajo prueba anunciaba `https://role.app` —el dominio viejo, el que caía
+		// por defecto— como su propia identidad.
 		const site = resolveSeoSiteUrl("localhost:3101");
 		expect(site).toBe("http://localhost:3101");
 		expect(buildRobotsTxt(site)).toContain(`Sitemap: ${site}/sitemap.xml`);
@@ -56,15 +58,15 @@ describe("resolveSeoSiteUrl (re-exportada desde site-url)", () => {
 	});
 
 	test("acepta un host sin esquema, como lo inyecta Vercel", () => {
-		expect(resolveSeoSiteUrl("role.app")).toBe("https://role.app");
+		expect(resolveSeoSiteUrl("role.ec")).toBe("https://role.ec");
 		expect(resolveSeoSiteUrl("my-project-git-main-acme.vercel.app")).toBe(
 			"https://my-project-git-main-acme.vercel.app",
 		);
 	});
 
 	test("quita la barra final para no duplicar la barra en las URLs", () => {
-		expect(resolveSeoSiteUrl("https://role.app/")).toBe("https://role.app");
-		expect(resolveSeoSiteUrl("https://role.app///")).toBe("https://role.app");
+		expect(resolveSeoSiteUrl("https://role.ec/")).toBe("https://role.ec");
+		expect(resolveSeoSiteUrl("https://role.ec///")).toBe("https://role.ec");
 	});
 
 	test("sin dominio configurado cae al fallback de producción", () => {
@@ -82,7 +84,7 @@ describe("sitemap generado", () => {
 		for (const route of INDEXABLE_ROUTES) {
 			expect(sitemap).toContain(`<loc>${PREVIEW}${route}</loc>`);
 		}
-		// La regresión exacta: el preview no puede decir `role.app`.
+		// La regresión exacta: el preview no puede decir `role.ec`.
 		expect(sitemap).not.toContain(FALLBACK_SITE_URL);
 	});
 
@@ -136,7 +138,7 @@ describe("robots generado", () => {
 
 describe("los dos archivos siguen siendo artefactos, no fuentes", () => {
 	// Si alguien saca estas rutas del .gitignore y commitea un sitemap con
-	// `role.app`, el sitio entero vuelve a anunciar producción en cada preview.
+	// `role.ec`, el sitio entero vuelve a anunciar producción en cada preview.
 	const gitignore = readFileSync(
 		new URL("../../../.gitignore", import.meta.url),
 		"utf8",

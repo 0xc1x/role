@@ -25,7 +25,7 @@ describe("apiUrlStartupError", () => {
 		// El caso que tiene que seguir funcionando: e2e, dev y producción
 		// configurada pasan por acá y NO deben romperse.
 		expect(apiUrlStartupError("http://127.0.0.1:3999/api/v1")).toBeNull();
-		expect(apiUrlStartupError("https://api.role.app/api/v1")).toBeNull();
+		expect(apiUrlStartupError("https://api.role.ec/api/v1")).toBeNull();
 		expect(apiUrlStartupError("http://localhost:4001/api/v1")).toBeNull();
 	});
 
@@ -91,7 +91,7 @@ describe("el cliente HTTP no inventa destinos", () => {
 			await apiUrlWith({ VITE_API_URL: "http://127.0.0.1:3999/api/v1" }),
 		).toBe("http://127.0.0.1:3999/api/v1");
 		expect(
-			await apiUrlWith({ VITE_API_URL: "https://api.role.app/api/v1" }),
-		).toBe("https://api.role.app/api/v1");
+			await apiUrlWith({ VITE_API_URL: "https://api.role.ec/api/v1" }),
+		).toBe("https://api.role.ec/api/v1");
 	});
 });

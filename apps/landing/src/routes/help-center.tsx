@@ -104,11 +104,8 @@ const FAQ_JSON_LD = {
 };
 
 function useContactOptions() {
-	const holaEmail = useConfig("contact.hola_email", "hola@role.app");
-	const negociosEmail = useConfig(
-		"contact.negocios_email",
-		"negocios@role.app",
-	);
+	const holaEmail = useConfig("contact.hola_email", "hola@role.ec");
+	const negociosEmail = useConfig("contact.negocios_email", "negocios@role.ec");
 	return [
 		{
 			icon: MailIcon,

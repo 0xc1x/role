@@ -29,9 +29,10 @@ import { siteUrlStartupError } from "./site-url";
  * landing sin datos; `VITE_SITE_URL` ausente daba una landing que canonicaliza,
  * og:url y sitemap por el dominio equivocado —medido: el server arrancaba sin
  * ruido, `[seo] falta VITE_SITE_URL` pasaba en el log y a continuación cada
- * página servía `https://role.app` como su propia identidad. Eso no se ve
- * mirando la página: se ve tres meses después en Search Console. Un default
- * silencioso acá es un sitio desindexado con la etiqueta de "funciona".
+ * página servía `https://role.app` —el dominio viejo, el que caía por
+ * defecto— como su propia identidad. Eso no se ve mirando la página: se ve
+ * tres meses después en Search Console. Un default silencioso acá es un sitio
+ * desindexado con la etiqueta de "funciona".
  *
  * Los candidatos van en ORDEN y todos, no el primero: el bundle SSR no ve lo
  * que Vite horneó en el de cliente, así que en el servidor el dominio puede

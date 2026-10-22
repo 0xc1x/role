@@ -58,10 +58,10 @@ export const ONBOARDING_PATH = "/businesses/onboarding";
  * build and the preview server in `playwright.config.ts`, and `seo.spec.ts`
  * compares the served canonical against it. The previous assertion was
  * `/href="https:\/\/[^"]+"/` — any absolute https origin passed, including
- * `https://role.app`, which is the entire bug: a site that canonicals, og:url
- * and sitemap its way to the wrong domain renders perfectly and is simply not in
- * the index. Asserting the exact origin turns "the tag is there" into "the tag
- * names us", which is the property that actually matters.
+ * `https://role.app`, the old domain, which is the entire bug: a site that
+ * canonicals, og:url and sitemap its way to the wrong domain renders perfectly
+ * and is simply not in the index. Asserting the exact origin turns "the tag is
+ * there" into "the tag names us", which is the property that actually matters.
  *
  * It has to be a literal, not `baseURL`: `baseURL` is the loopback address the
  * browser connects to, and that is deliberately NOT what the site should claim

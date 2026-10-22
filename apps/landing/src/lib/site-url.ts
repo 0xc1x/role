@@ -21,7 +21,7 @@
  *                       var puede no estar, así que necesita un fallback.
  *   · `env.ts`        → el guard de arranque, que necesita distinguir AUSENCIA
  *                       de un valor: un fallback adentro haría que `""` y
- *                       `"role.app"` dieran el mismo string truthy y el error
+ *                       `"role.ec"` dieran el mismo string truthy y el error
  *                       de arranque no podría dispararse.
  *
  * `resolveSiteUrl` es el normalizador —sin fallback, `undefined` si no hay— y
@@ -32,8 +32,11 @@
  * Origen de último recurso. Solo lo usa el BUILD (ver `resolveSeoSiteUrl`): un
  * sitemap sin origen no le sirve a nadie, y el sitio real no puede ni arrancar
  * sin `VITE_SITE_URL` (ver `siteUrlStartupError`).
+ *
+ * Es el dominio del producto: `role.ec`, el que se adquirió. `role.app` fue el
+ * viejo, y un sitemap que lo anuncie manda el sitio entero fuera del índice.
  */
-export const FALLBACK_SITE_URL = "https://role.app";
+export const FALLBACK_SITE_URL = "https://role.ec";
 
 /**
  * Un solo mensaje para los dos puntos de arranque que fallan (el dev server en
@@ -44,7 +47,7 @@ export const SITE_URL_REQUIRED_MESSAGE = [
 	"[role:landing] falta el dominio público del sitio y la landing no lo elige por su cuenta.",
 	"Sin VITE_SITE_URL (o VERCEL_PROJECT_PRODUCTION_URL en Vercel) el canonical, og:url",
 	"y el sitemap apuntan al dominio equivocado y el sitio no se indexa. Exportá",
-	"VITE_SITE_URL=https://role.app antes de arrancar.",
+	"VITE_SITE_URL=https://role.ec antes de arrancar.",
 ].join(" ");
 
 /**
@@ -59,7 +62,7 @@ export const SITE_URL_REQUIRED_MESSAGE = [
  * basepath—, así que descartar el path es la única lectura honesta.
  *
  * Acepta las tres formas en que un deploy puede entregar el dominio: con
- * esquema (`https://role.app`), pelado como la inyecta Vercel (`role.app`), y
+ * esquema (`https://role.ec`), pelado como la inyecta Vercel (`role.ec`), y
  * con puerto para el loopback de la suite e2e (`localhost:3001`).
  */
 export function resolveSiteUrl(

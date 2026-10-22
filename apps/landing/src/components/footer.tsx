@@ -48,11 +48,8 @@ export function Footer() {
 		"social.youtube_url",
 		SOCIAL_FALLBACKS["social.youtube_url"],
 	);
-	const holaEmail = useConfig("contact.hola_email", "hola@role.app");
-	const negociosEmail = useConfig(
-		"contact.negocios_email",
-		"negocios@role.app",
-	);
+	const holaEmail = useConfig("contact.hola_email", "hola@role.ec");
+	const negociosEmail = useConfig("contact.negocios_email", "negocios@role.ec");
 
 	const SOCIAL = [
 		{ label: "Instagram", href: instagram },
