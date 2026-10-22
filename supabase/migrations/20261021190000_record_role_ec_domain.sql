@@ -121,6 +121,17 @@
 -- `email.from` —el remitente del correo saliente— entra en esa misma regla y
 -- no necesita un caso aparte: en producción vale `notificaciones@role.ec`, así
 -- que no se toca, y sólo se movería si todavía dijera `role.app`.
+--
+-- LA PUERTA TIENE LA MISMA FORMA QUE EL BARRIDO
+--
+-- La comprobación final no busca la cadena suelta `role.app`: busca las FORMAS
+-- que los barridos de este archivo saben arreglar. `role.app` es también el
+-- nombre de la cuenta de la marca en las plataformas de otros
+-- (`facebook.com/role.app`), y una puerta que buscara la cadena suelta un día
+-- se negaría a aplicar una migración por una cadena que no es un dominio
+-- nuestro, y el motivo del fallo no se vería. El sellado `20260927053728` ya
+-- lo hizo bien —su comprobación miraba `https://role.app`, que es un host—.
+-- La sección 7 dice forma por forma.
 
 begin;
 
@@ -330,24 +341,50 @@ end $rewrite$;
 
 -- 7. Cerrar la puerta detrás.
 --
--- Una sola exención, `social.%`, y por la razón de arriba: los nombres de
--- cuenta de la marca en el dominio de otro. `links.admin_url` NO está exento:
--- el dominio del panel está confirmado en `role.ec` desde `20260927141336`, y
--- un archivo que lo exceptuara afirmaría una conjetura en vez de un hecho.
+-- LA PUERTA TIENE LA FORMA DEL BARRIDO, NO LA DE LA CADENA SUELTA.
+--
+-- `role.app` es, además de nuestro dominio viejo, el NOMBRE DE LA CUENTA de la
+-- marca en las plataformas de otros: `facebook.com/role.app`,
+-- `tiktok.com/@role.app`, `youtube.com/@role.app`. Una puerta que buscara la
+-- cadena suelta `role.app` un día se negaría a aplicar esta migración por una
+-- cadena que NO es un dominio nuestro, y el motivo del fallo no se vería.
+-- El sellado `20260927053728` lo hizo bien: su comprobación miraba
+-- `https://role.app` —un host— y no la cadena suelta, y por eso una cuenta
+-- social dentro de una plantilla nunca lo habría parado.
+--
+-- Por eso cada comprobación de aquí mira la FORMA que el barrido de su
+-- sección sabe arreglar, y no la cadena suelta:
+--
+--   - `app_config`: el VALOR DE TEXTO de una clave no social (sección 1). La
+--     exención de `social.%` sigue en pie, con su razón.
+--   - `links.admin_url`: el valor exacto, que es el que la sección 2 siembra
+--     y el que `20260927141336` confirmó. NO está exento: el dominio del
+--     panel está confirmado en `role.ec`, y un archivo que lo exceptuara
+--     afirmaría una conjetura en vez de un hecho.
+--   - plantillas y componentes: el HOST `https://role.app` y la DIRECCIÓN
+--     `mailto:<local>@role.app` —las dos formas de las secciones 3 y 4—. El
+--     patrón de la dirección es el MISMO que usa la sección 4, sin un solo
+--     backslash: un `mailto:` con `role.app` es siempre nuestro dominio.
+--   - `slides.redirect_url`: el PREFIJO `https://role.app` (sección 5). Un
+--     banner que apunte a la web de otro no es cosa nuestra.
+--   - `notify_business_pending()`: el LITERAL `https://admin.role.app` (sección
+--     6), que es lo único que esa sección sustituye.
 --
 -- `like`, no regex: este archivo se transporta como texto y un backslash
 -- perdido en un regex es un cambio semántico silencioso. `like` no tiene nada
--- que escapar. La excepción es la enumeración de la sección 4, y su patrón
--- no lleva ningún backslash.
+-- que escapar. La excepción es el patrón del `mailto:`, que no lleva ningún
+-- backslash y que se usa tal cual en el barrido y en la puerta.
 
 do $verify$
 declare
   v_leftovers text;
+  v_mailto constant text := 'mailto:[^@[:space:]"<>]+@role[.]app';
 begin
   select string_agg(key, ', ') into v_leftovers
     from public.app_config
    where key not like 'social.%'
-     and value::text like '%role.app%';
+     and jsonb_typeof(value) = 'string'
+     and value #>> '{}' like '%role.app%';
 
   if v_leftovers is not null then
     raise exception 'non-social app_config still references role.app: %', v_leftovers;
@@ -361,27 +398,37 @@ begin
     raise exception 'links.admin_url is not https://admin.role.ec';
   end if;
 
-  if exists (select 1 from public.email_templates
-              where deleted_at is null and body_html like '%role.app%') then
+  if exists (
+    select 1 from public.email_templates t
+     where t.deleted_at is null
+       and (t.body_html like '%https://role.app%'
+            or exists (select 1
+                         from regexp_matches(t.body_html, v_mailto, 'g')))
+  ) then
     raise exception 'an email template still references role.app';
   end if;
 
-  if exists (select 1 from public.email_components
-              where deleted_at is null and html_content like '%role.app%') then
+  if exists (
+    select 1 from public.email_components c
+     where c.deleted_at is null
+       and (c.html_content like '%https://role.app%'
+            or exists (select 1
+                         from regexp_matches(c.html_content, v_mailto, 'g')))
+  ) then
     raise exception 'an email component still references role.app';
   end if;
 
   if exists (select 1 from public.slides
-              where redirect_url like '%role.app%') then
+              where redirect_url like 'https://role.app%') then
     raise exception 'a slide still redirects to role.app';
   end if;
 
   if exists (
     select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
      where n.nspname = 'public' and p.proname = 'notify_business_pending'
-       and pg_get_functiondef(p.oid) like '%role.app%'
+       and pg_get_functiondef(p.oid) like '%https://admin.role.app%'
   ) then
-    raise exception 'notify_business_pending still references role.app';
+    raise exception 'notify_business_pending still references the old admin URL';
   end if;
 end $verify$;
 
