@@ -39,3 +39,14 @@ describe("i18n string placeholders", () => {
 		expect(strings.allOffers.price.replace("{n}", `$${maxPrice}`)).toBe("$42");
 	});
 });
+
+describe("los correos de contacto están en el dominio del producto", () => {
+	test("soporte, legal y privacidad escriben a role.ec", () => {
+		// `role.ec` es el dominio del producto —el que se adquirió—. `role.app`
+		// fue el viejo: un correo en él no llega a ningún buzón, y estos tres
+		// son los que la persona copia para escribir desde la app.
+		expect(strings.helpCenter.supportEmail).toBe("soporte@role.ec");
+		expect(strings.termsScreen.contactEmail).toBe("legal@role.ec");
+		expect(strings.privacyScreen.contactEmail).toBe("privacidad@role.ec");
+	});
+});

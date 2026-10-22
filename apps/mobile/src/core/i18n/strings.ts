@@ -1728,7 +1728,7 @@ export const strings = {
 		email: "Email",
 		call: "Llamar",
 		comingSoon: "Próximamente disponible",
-		supportEmail: "soporte@role.app",
+		supportEmail: "soporte@role.ec",
 		supportPhone: "+593 99 000 0000",
 		mailSubject: "Contacto - Centro de ayuda",
 		mailError: "No se pudo abrir el cliente de correo",
@@ -1942,7 +1942,7 @@ export const strings = {
 	termsScreen: {
 		title: "Términos y condiciones",
 		updatedAt: "Última actualización: 19 de abril de 2026",
-		contactEmail: "legal@role.app",
+		contactEmail: "legal@role.ec",
 		sections: [
 			{
 				title: "1. Aceptación y objeto",
@@ -1994,7 +1994,7 @@ export const strings = {
 	privacyScreen: {
 		title: "Política de privacidad",
 		updatedAt: "Última actualización: 19 de abril de 2026",
-		contactEmail: "privacidad@role.app",
+		contactEmail: "privacidad@role.ec",
 		sections: [
 			{
 				title: "1. Responsable del tratamiento",
