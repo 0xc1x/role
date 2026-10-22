@@ -1,8 +1,8 @@
 -- Registra en el ledger el dominio del producto: `role.ec`.
 --
--- QUÉ HAY EN LA BASE Y QUÉ NO ESTÁ EN EL LEDGER
+-- QUÉ HAY EN LA BASE
 --
--- Producción corre en `role.ec`, y sus valores de `app_config` lo dicen:
+-- Producción corre en `role.ec` desde hace meses, y casi todo lo dice:
 --
 --   support.email          = soporte@role.ec
 --   contact.hola_email     = hola@role.ec
@@ -30,15 +30,20 @@
 -- `docs/security-debt.md` §8, la misma clase de hueco que `20260906131000`
 -- documenta para el drop de aridad-2 de `cancel_order`.
 --
+-- Y no es sólo el `app_config`. El dominio viejo se había quedado en TRES
+-- superficies más, y ninguna la corrigió una fila del ledger. Las tres están
+-- descritas en su sección de este archivo, y las tres se corrigen aquí.
+--
 -- POR QUÉ UN ARCHIVO NUEVO Y NO UNA EDICIÓN
 --
 -- Los archivos que ya escriben estos valores están SELLADOS: su `md5sum`
 -- coincide con `md5(statements[1])` del ledger, y esa coincidencia es la
 -- prueba de lo que corrió. `20260821205638` (siembra `support.email` y
 -- compañía en `role.app`), `20260927053728` (normaliza
--- `privacy.contact_email`) y `20260927141336` (confirma el dominio del panel)
--- no se tocan: editarlos destruiría la evidencia. La corrección va en un
--- archivo nuevo, que es lo que este es.
+-- `privacy.contact_email` y barre el enlace `https://role.app` de las
+-- plantillas y de los componentes) y `20260927141336` (confirma el dominio
+-- del panel) no se tocan: editarlos destruiría la evidencia. La corrección va
+-- en un archivo nuevo, que es lo que este es.
 --
 -- QUÉ ARREGLA
 --
@@ -47,27 +52,52 @@
 --    En un entorno nuevo —donde el seed dice `role.app`— las dos fallan y
 --    hacen rollback, así que `supabase db push` contra un proyecto limpio se
 --    rompe en `20260927053728`. Este archivo va después y deja el final del
---    replay en `role.ec`.
+--    replay en `role.ec`, sin una sola referencia a `role.app` fuera de las
+--    cuentas sociales.
 --
 -- 2. EL LEDGER. A partir de esta fila, el directorio describe la base que hay
 --    y un `supabase db push` a un entorno nuevo deja las claves de `app_config`
---    en el mismo dominio que producción.
+--    y los enlaces del producto en el mismo dominio que producción.
 --
--- EN PRODUCCIÓN ESTE ARCHIVO NO CAMBIA NADA
+-- QUÉ CAMBIA EN PRODUCCIÓN: TRES COSAS, Y SÓLO TRES
 --
--- Los valores de arriba ya son `role.ec`, así que el `update` de la sección 1
--- no encuentra ninguna fila que tocar; la semilla de `links.admin_url` choca
--- con la fila existente y no la pisa; y el barrido de plantillas y componentes
--- no encuentra ningún enlace a `https://role.app`. Este archivo es el REGISTRO
--- de lo que producción ya tenía, escrito en el único sitio donde un registro
--- significa algo.
+-- Un archivo que no cambia nada es un archivo que no se puede reproducir hacia
+-- un estado correcto: el `supabase db push` de un entorno nuevo reproduciría
+-- el dominio viejo, que es justo lo que este archivo viene a arreglar. Así que
+-- este archivo SÍ cambia cosas en producción, y lo que cambia es exactamente
+-- lo que queda con el dominio viejo, medido el 2026-10-21:
+--
+--   1. El pie de página "Footer principal (oscuro)" de `email_components`
+--      lleva `<a href="mailto:hola@role.app">`: un `mailto:` a un dominio en
+--      el que no se recibe correo. Lo mueve la sección 4.
+--
+--   2. Tres banners de `public.slides` llevan `redirect_url` a
+--      `https://role.app/about` (×2) y `https://role.app/for-business`: son
+--      páginas NUESTRAS, del dominio que se ha adquirido, y mientras digan
+--      `role.app` llevan a una página que no existe. Hoy los tres están
+--      `active = false`, así que nadie los está viendo: por eso esto no es una
+--      urgencia y por eso es una bomba cargada. Lo mueve la sección 5.
+--
+--   3. `public.notify_business_pending()` conserva `'https://admin.role.app'`
+--      como RESERVA de `links.admin_url`. En producción no se nota, porque la
+--      clave está y vale `role.ec`; pero si la clave falta o se desactiva, el
+--      correo de revisión de negocios vuelve a apuntar a un host que no
+--      existe. Lo mueve la sección 6.
+--
+-- Y NADA MÁS cambia en producción: las claves de `app_config` ya están en
+-- `role.ec` (sección 1, que no encuentra ninguna fila), el barrido del
+-- enlace `https://role.app` de las plantillas y de los componentes ya lo
+-- hizo el sellado `20260927053728` (sección 3, que no encuentra nada), y
+-- las cuentas sociales se dejan como están (sección 1 y la aserción final).
 --
 -- IDEMPOTENTE
 --
 -- Correrlo dos veces no cambia nada: cada `update` toca sólo filas cuyo valor
--- todavía es el viejo, la semilla usa `on conflict do nothing`, y el
--- `do $verify$` del final convierte la promesa en algo verificable en vez de
--- algo declarado.
+-- todavía es el viejo, la semilla usa `on conflict do nothing`, el barrido
+-- del `mailto:` enumera las direcciones que quedan (que después de la
+-- primera pasada son ninguna), y la reescritura de la función hace nada si
+-- el literal viejo ya no está en el cuerpo. El `do $verify$` del final
+-- convierte la promesa en algo verificable en vez de algo declarado.
 --
 -- POR QUÉ `social.%` QUEDA EXENTO
 --
@@ -91,17 +121,6 @@
 -- `email.from` —el remitente del correo saliente— entra en esa misma regla y
 -- no necesita un caso aparte: en producción vale `notificaciones@role.ec`, así
 -- que no se toca, y sólo se movería si todavía dijera `role.app`.
---
--- LO QUE ESTE ARCHIVO NO TOCA
---
--- El pie de página que producción guarda en `email_components` ("Footer
--- principal (oscuro)") tiene un `mailto:hola@role.app`. El barrido de la
--- sección 3 es del ENLACE (`https://role.app`), igual que el de
--- `20260927053728`, y ese `mailto:` no es un enlace: es una dirección de
--- correo en un dominio que no recibe correo, y corregirla cambia contenido
--- que producción muestra. Queda anotado aquí y no resuelto aquí: este
--- archivo registra el dominio y repara el replay; esa dirección es una
--- decisión aparte.
 
 begin;
 
@@ -109,13 +128,15 @@ begin;
 --
 -- `key not like 'social.%'` es la EXENCIÓN del archivo, y no es un detalle:
 -- los valores de `social.%` en producción contienen la cadena `role.app` como
--- nombre de cuenta. `jsonb_typeof(value) = 'string'` evita reescribir un
--- valor que no sea texto (un array o un objeto), donde `value #>> '{}'`
--- devolvería el JSON entero y `to_jsonb(...)` lo convertiría en una cadena.
+-- NOMBRE DE CUENTA de la marca en el dominio de otro. `jsonb_typeof(value) =
+-- 'string'` evita reescribir un valor que no sea texto (un array o un
+-- objeto), donde `value #>> '{}'` devolvería el JSON entero y `to_jsonb(...)`
+-- lo convertiría en una cadena.
 --
 -- La condición `value #>> '{}' like '%role.app%'` es la que hace la operación
--- idempotente y la que la deja en no-op sobre producción: si el valor ya es
--- `role.ec`, la fila no entra.
+-- idempotente: si el valor ya es `role.ec`, la fila no entra. En producción
+-- no entra ninguna, y ese es el motivo por el que esta sección no cambia
+-- nada allí: las claves ya están donde deben.
 
 update public.app_config
    set value = to_jsonb(replace(value #>> '{}', 'role.app', 'role.ec')),
@@ -142,11 +163,11 @@ values ('links.admin_url', to_jsonb('https://admin.role.ec'::text), 'string', 'l
         false, true)
 on conflict (key) do nothing;
 
--- 3. Plantillas y componentes.
+-- 3. Plantillas y componentes: el ENLACE.
 --
--- El literal es `https://role.app`, el ENLACE, y por eso no puede tocar una
--- dirección de correo ni el nombre de una cuenta social: sólo la URL. Es
--- idempotente, y en producción no encuentra nada.
+-- El literal es `https://role.app`, y es el ENLACE: por eso no puede tocar una
+-- dirección de correo ni el nombre de una cuenta social. Es idempotente, y en
+-- producción no encuentra nada —el sellado `20260927053728` ya lo movió—.
 
 update public.email_templates
    set body_html = replace(body_html, 'https://role.app', 'https://role.ec'),
@@ -160,16 +181,164 @@ update public.email_components
  where deleted_at is null
    and html_content like '%https://role.app%';
 
--- 4. Cerrar la puerta detrás.
+-- 4. Plantillas y componentes: el `mailto:`.
 --
--- Una sola exención, `social.%`, y por la razón de arriba. `links.admin_url`
--- NO está exento: el dominio del panel está confirmado en `role.ec` desde
--- `20260927141336`, y un archivo que lo exceptuara afirmaría una conjetura en
--- vez de un hecho.
+-- El pie de página "Footer principal (oscuro)" lleva
+-- `<a href="mailto:hola@role.app">Soporte</a>`, y `role.app` es un dominio en
+-- el que no se recibe correo: ese enlace no llega a nadie. Es la misma fuga
+-- que el enlace, con otra forma, y el barrido de la sección 3 no la alcanza
+-- porque su literal es `https://role.app` y aquí el texto es `mailto:`.
+--
+-- Un `mailto:` con `role.app` es SIEMPRE nuestro dominio, así que la forma
+-- es inequívoca: no hay ningún `mailto:` a `role.app` que sea de otro. Por
+-- eso el barrido es de la FORMA `mailto:` y no de la cadena suelta: un
+-- `@role.app` suelto en un cuerpo puede ser el nombre de una cuenta
+-- (`twitter.com/@role.app`), y reescribirlo rompería el enlace.
+--
+-- Las direcciones se ENUMERAN y después se reescriben con un `replace`
+-- literal, sin captura ni referencia: un regex con `\1` es exactamente lo que
+-- `20260927141336` advierte (un backslash perdido en el transporte es un
+-- cambio semántico silencioso), y el patrón de la enumeración no lleva
+-- ninguno —el punto de `role.app` va como `role[.]app`, que es una clase de
+-- caracteres y no un escape—.
+
+do $mailto$
+declare
+  v_addr text;
+  v_new  text;
+begin
+  for v_addr in
+    select distinct unnest(m)
+      from (
+             select c.html_content as cuerpo
+               from public.email_components c
+              where c.deleted_at is null
+             union all
+             select t.body_html as cuerpo
+               from public.email_templates t
+              where t.deleted_at is null
+           ) cuerpos,
+           regexp_matches(cuerpos.cuerpo, 'mailto:[^@[:space:]"<>]+@role[.]app', 'g') m
+  loop
+    v_new := replace(v_addr, '@role.app', '@role.ec');
+
+    update public.email_components
+       set html_content = replace(html_content, v_addr, v_new),
+           updated_at = now()
+     where deleted_at is null
+       and strpos(html_content, v_addr) > 0;
+
+    update public.email_templates
+       set body_html = replace(body_html, v_addr, v_new),
+           updated_at = now()
+     where deleted_at is null
+       and strpos(body_html, v_addr) > 0;
+  end loop;
+end $mailto$;
+
+-- 5. Los banners: `slides.redirect_url`.
+--
+-- Tres filas de `public.slides` apuntan a `https://role.app/about` (×2) y
+-- `https://role.app/for-business`. Son páginas NUESTRAS —las del propio
+-- producto—, del dominio que se ha adquirido, y mientras digan `role.app`
+-- llevan a una página que no existe. Hoy las tres están `active = false`
+-- (medido el 2026-10-21), así que nadie las está viendo: por eso esto no es
+-- una urgencia, y por eso es una bomba cargada. Un banner que alguien
+-- reactiva mañana manda al usuario a un dominio muerto.
+--
+-- La condición es el PREFIJO: `redirect_url like 'https://role.app%'`. Un
+-- banner que apunte a la web de otro no se toca, y el reemplazo es del mismo
+-- prefijo. Un `role.app` que estuviera en otra posición —en un query string,
+-- en un camino— tampoco se toca.
+--
+-- El barrido cubre TODAS las filas, también las de `deleted_at is not null`:
+-- un enlace es un enlace, y un banner que alguien revive tiene que llevar a
+-- la página buena. En producción no hay filas borradas, así que hoy la
+-- diferencia no se ve.
+
+update public.slides
+   set redirect_url = replace(redirect_url, 'https://role.app', 'https://role.ec'),
+       updated_at = now()
+ where redirect_url like 'https://role.app%';
+
+-- 6. `notify_business_pending()`: el literal de reserva del panel.
+--
+-- El sellado `20260927053728` movió el literal del panel a la clave
+-- `links.admin_url` y dejó el valor viejo como RESERVA, para que borrar la
+-- configuración no fuera la razón de que un operador perdiera el enlace
+-- profundo. La reserva quedó con el dominio viejo: `'https://admin.role.app'`.
+-- En producción no se nota, porque la clave está y vale `role.ec`; pero si
+-- la clave falta o se desactiva, el correo de revisión de negocios vuelve a
+-- apuntar a un host que no existe.
+--
+-- El cuerpo se reescribe EN SU LUGAR, con la técnica del archivo sellado: se
+-- lee `pg_get_functiondef`, se sustituye el literal y se ejecuta el
+-- `CREATE OR REPLACE` que sale de ahí. `CREATE OR REPLACE` conserva el OID y
+-- el ACL, así que los permisos de la función no cambian.
+--
+-- UNA sola sustitución sirve para las DOS formas del literal:
+--
+--   - producción, que tiene la forma de la RESERVA
+--     ('https://admin.role.app');
+--   - el replay, donde `20260927053728` hace rollback y el cuerpo conserva
+--     la forma original, con el literal entero
+--     ('https://admin.role.app/businesses/').
+--
+-- Es idempotente de una manera explícita: si el literal viejo NO está, el
+-- cuerpo ya está corregido y no se hace nada, en vez de fallar —un archivo
+-- que ya corrió tiene que poder correr otra vez—. Y cuando el literal SÍ
+-- está, la sustitución se comprueba contra el catálogo: el `execute` no
+-- puede ser un no-op silencioso.
+
+do $rewrite$
+declare
+  v_def text;
+  v_old constant text := 'https://admin.role.app';
+  v_new constant text := 'https://admin.role.ec';
+begin
+  select pg_get_functiondef(p.oid) into v_def
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname = 'notify_business_pending';
+
+  if v_def is null then
+    raise exception 'notify_business_pending() not found';
+  end if;
+
+  if position(v_old in v_def) > 0 then
+    v_def := replace(v_def, v_old, v_new);
+
+    -- La sustitución tiene que verse en el texto que se va a ejecutar: si no
+    -- se viera, el `execute` de abajo sería un no-op silencioso.
+    if position(v_new in v_def) = 0 then
+      raise exception 'the admin URL literal was not substituted in notify_business_pending';
+    end if;
+
+    execute v_def;
+
+    -- Y el catálogo tiene que decirlo. Sin esta lectura, un `execute` que no
+    -- hubiera sustituido nada dejaría el dominio viejo en el cuerpo y sólo
+    -- lo vería la aserción final, que no dice QUÉ falló.
+    select pg_get_functiondef(p.oid) into v_def
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public' and p.proname = 'notify_business_pending';
+
+    if position(v_old in v_def) > 0 then
+      raise exception 'notify_business_pending still carries %', v_old;
+    end if;
+  end if;
+end $rewrite$;
+
+-- 7. Cerrar la puerta detrás.
+--
+-- Una sola exención, `social.%`, y por la razón de arriba: los nombres de
+-- cuenta de la marca en el dominio de otro. `links.admin_url` NO está exento:
+-- el dominio del panel está confirmado en `role.ec` desde `20260927141336`, y
+-- un archivo que lo exceptuara afirmaría una conjetura en vez de un hecho.
 --
 -- `like`, no regex: este archivo se transporta como texto y un backslash
 -- perdido en un regex es un cambio semántico silencioso. `like` no tiene nada
--- que escapar.
+-- que escapar. La excepción es la enumeración de la sección 4, y su patrón
+-- no lleva ningún backslash.
 
 do $verify$
 declare
@@ -193,13 +362,26 @@ begin
   end if;
 
   if exists (select 1 from public.email_templates
-              where deleted_at is null and body_html like '%https://role.app%') then
-    raise exception 'an email template still links to https://role.app';
+              where deleted_at is null and body_html like '%role.app%') then
+    raise exception 'an email template still references role.app';
   end if;
 
   if exists (select 1 from public.email_components
-              where deleted_at is null and html_content like '%https://role.app%') then
-    raise exception 'an email component still links to https://role.app';
+              where deleted_at is null and html_content like '%role.app%') then
+    raise exception 'an email component still references role.app';
+  end if;
+
+  if exists (select 1 from public.slides
+              where redirect_url like '%role.app%') then
+    raise exception 'a slide still redirects to role.app';
+  end if;
+
+  if exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public' and p.proname = 'notify_business_pending'
+       and pg_get_functiondef(p.oid) like '%role.app%'
+  ) then
+    raise exception 'notify_business_pending still references role.app';
   end if;
 end $verify$;
 
