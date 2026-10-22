@@ -484,7 +484,7 @@ function TextValueInput({
 				type={valueType === "number" ? "number" : "text"}
 				placeholder={
 					valueType === "email"
-						? "soporte@role.app"
+						? "soporte@role.ec"
 						: valueType === "url"
 							? "https://..."
 							: valueType === "phone"
