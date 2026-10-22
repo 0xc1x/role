@@ -267,7 +267,9 @@ archivo donde se ve. Lo que no está acá está resuelto y sellado.
 La primera tarea del plan no es un contrato de TypeScript sino una regla de la base, porque
 es la regla que Plan 2 va a necesitar para no abrir un agujero el mismo día que publique.
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
+
+  > Verificado: los tres casos están en `apps/api/src/database/security/business-members.rls.db.spec.ts:6358`, `:6499` y `:6524`, con los nombres del plan —«un negocio no puede tener dos dueños», «al dueño no se lo desactiva» y «al dueño no se lo da de baja»— (commit `be1fca4`).
 
 ```ts
 test('un negocio no puede tener dos dueños', async () => {
@@ -299,12 +301,16 @@ test('al dueño no se lo da de baja', async () => {
 También: un `manager` o `staff` **sí** se puede desactivar y dar de baja — el trigger tiene
 que distinguir el rol, no negarle la fila entera.
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
+
+  > El rojo no quedó registrado: el commit `be1fca4` no nombra el test que se puso rojo —el spec y la migración salieron en el mismo commit—. La evidencia que queda es la del propio archivo.
 
 Run: `cd apps/api && bun test --isolate src/database/security/business-members.rls.db.spec.ts`
 Expected: FAIL — nada de esto está todavía.
 
-- [ ] **Step 3: Escribir el índice y el trigger**
+- [x] **Step 3: Escribir el índice y el trigger**
+
+  > Verificado en la base viva: existe el índice parcial `business_members_one_owner_per_business` (`where role = 'owner' and deleted_at is null`) y la función `public.enforce_owner_is_untouchable()`. **El trigger quedó repartido en tres migraciones y no como el SQL del plan**: la desactivación la niega `20261017033947_owner_is_untouchable.sql`, la baja `20261017040808_owner_cannot_be_deleted.sql` y la degradación `20261020052915_owner_cannot_be_demoted.sql` —porque una degradación y una promoción tienen que ser **dos sentencias**, y por eso el invariante final lo vigila un `CONSTRAINT TRIGGER … DEFERRABLE INITIALLY DEFERRED`. Los tres `md5sum` coinciden con los del ledger.
 
 ```sql
 create unique index business_members_one_owner_per_business
@@ -344,7 +350,9 @@ La degradación —`owner` → `manager`— pasa, y tiene que pasar: es la únic
 deja ("ningún rol puede desactivar al dueño") y la que va a necesitar la transferencia de
 propiedad cuando exista. Lo que no pasa es que esa fila quede sin dueño.
 
-- [ ] **Step 4: Los límites de plan, legibles por máquina**
+- [x] **Step 4: Los límites de plan, legibles por máquina**
+
+  > Verificado en la base viva: los dos triggers de tope levantan `errcode = 'R0001'` con `detail` (`business=… plan=… limit=… current=…`) y `hint` (`subí de plan o gestioná el acceso que ya existe`), y el guard del dueño levanta `R0002` con `detail` y `hint`. El texto en español del plan sigue íntegro dentro del `message`.
 
 Los dos triggers de `20261015034230` levantan `P0001` con la prosa dentro. Reescribirlos
 con código estable, sin perder un ápice del texto:
@@ -369,14 +377,18 @@ Los códigos que la base emite, y que la Task 4 tiene que mapear a una acción d
 | `R0001` | límite de plan alcanzado | "subí de plan", con el plan y el tope en `detail` |
 | `R0002` | el dueño no se puede desactivar ni dar de baja | "degradalo a manager primero" |
 
-- [ ] **Step 5: Cerrar los `revoke`**
+- [x] **Step 5: Cerrar los `revoke`**
+
+  > Verificado: `20261017033947_owner_is_untouchable.sql:290-291` añade `authenticated` a la lista de las dos funciones de tope. La migración `20261021182624_plan_limits_from_catalog.sql:467-468` (del Plan 5) volvió a escribir la línea sin `authenticated`, pero el ACL vivo sigue sin EXECUTE para `anon` ni para `authenticated` (`{postgres=X/postgres,service_role=X/postgres}`), así que el efecto —la lista que se defiende por sí sola— sigue en pie.
 
 `20261015034230:305-307` revoca de `public, anon` y no de `authenticated`. Hoy no importa
 —`pg_default_acl` del proyecto ya da `{postgres, service_role}`— pero un default que se
 amplíe en algún momento abriría los triggers a `authenticated` sin que nadie lo pidiera.
 Agregar `authenticated` a la lista lo vuelve indefenso por sí mismo.
 
-- [ ] **Step 6: Correr, aplicar, sellar y commitear**
+- [x] **Step 6: Correr, aplicar, sellar y commitear**
+
+  > Verificado: filas del ledger `20261017033947` / `owner_is_untouchable` y `20261017040808` / `owner_cannot_be_deleted`; commit `be1fca4` y `04b1b8d`.
 
 ```bash
 git commit -am "feat(db): un dueño por negocio, y ningún rol lo desactiva"
@@ -401,21 +413,27 @@ git commit -am "feat(db): un dueño por negocio, y ningún rol lo desactiva"
 `BUSINESS_PLAN_CODES`, `BUSINESS_FEATURES`, `BUSINESS_PLAN_LIMITS` y
 `BUSINESS_PLAN_FEATURES` ya existen (`business-plan.ts`, Plan 1). Faltan los de membresía.
 
-- [ ] **Step 1: Vocabularios**
+- [x] **Step 1: Vocabularios**
+
+  > Verificado: `packages/commons/src/business/enums/business-member-role.ts` y `business-member-status.ts` existen, con el array `as const`, el `type` y el objeto const; `staff-session-reason.ts` ajoute el tercero (commit `c1fe48a`).
 
 `BUSINESS_MEMBER_ROLES = ["owner", "manager", "staff"]`,
 `BUSINESS_MEMBER_STATUSES = ["active", "disabled"]`, con el patrón exacto de
 `business-plan.ts`: el array `as const`, el `type`, y el objeto const con la forma que el
 resto del paquete ya usa para el DTO.
 
-- [ ] **Step 2: El schema de zod**
+- [x] **Step 2: El schema de zod**
+
+  > Verificado: `packages/commons/src/business/schemas/business-member.schema.ts` (260 líneas) y su spec `packages/commons/src/business/__tests__/business-member.schema.test.ts` (349 líneas) — commit `c1fe48a`.
 
 `label`, `role`, `status`, `session_ttl_hours`, `business_location_ids[]`, `alias`, más los
 schemas de entrada que la API necesita: crear, editar, rotar. `alias` con validación de
 formato y el aviso de dominio que §8 pide — que el schema exprese que un dominio distinto
 de `.role.ec` es legítimo, y que por eso la respuesta lleva un aviso, no un error.
 
-- [ ] **Step 3: El guard que falta**
+- [x] **Step 3: El guard que falta**
+
+  > Verificado: `apps/api/src/database/security/business-member-vocabulary.db.spec.ts` existe (359 líneas en `c1fe48a`) y compara `BUSINESS_MEMBER_ROLES` y `BUSINESS_MEMBER_STATUSES` contra `pg_enum` en las dos direcciones. El Plan 3 lo amplió: hoy afirma además el `CHECK` de `session_ttl_hours` y que `STAFF_SESSION_REASONS` y `business_member_session_state()` digan lo mismo.
 
 `business_members` tiene dos vocabularios de enum y un `CHECK` que **no asserta nada en
 ningún harness** — lo dejó anotado el Plan 1 y sigue abierto. Este es el momento: el
@@ -427,7 +445,9 @@ Un spec que compare `BUSINESS_MEMBER_ROLES` contra `pg_enum` y
 `plan-limits.db.spec.ts` compara los límites contra los triggers. Sin el, borrar
 `visibility_plus` —o `manager`— deja todo verde y revienta las Tasks 3 y 4 de este plan.
 
-- [ ] **Step 4: `StaffSessionStateSchema`**
+- [x] **Step 4: `StaffSessionStateSchema`**
+
+  > Verificado: `packages/commons/src/auth/schemas/auth.schema.ts:176` declara el schema con los cinco campos del §5.2, y `reason` es `z.enum(STAFF_SESSION_REASONS)` — el vocabulario entero, no una muestra.
 
 `{ role, location_ids, expires_at, reason, business_ids }` con el vocabulario de `reason`
 que la Task 4 del Plan 1 dejó así: `ok`, `no_membership`, `multiple_businesses`,
@@ -435,7 +455,9 @@ que la Task 4 del Plan 1 dejó así: `ok`, `no_membership`, `multiple_businesses
 schema tiene que conocerla entera, y si mañana la base agrega un valor sin que el schema lo
 siga, el schema es el que está equivocado.
 
-- [ ] **Step 5: Verificar el radio de impacto**
+- [x] **Step 5: Verificar el radio de impacto**
+
+  > Verificado: `bun run typecheck` en la raíz está verde (6/6).
 
 `bun run typecheck` en la raíz. Este es el SSOT: un error acá compila en la API, en el
 admin, en el landing y en el móvil.
@@ -454,7 +476,9 @@ admin, en el landing y en el móvil.
 - Consumes: `packages/commons` (Task 2), `service_role`, `supabase.auth.admin`.
 - Produce: la lógica de negocio de los accesos, sin HTTP encima.
 
-- [ ] **Step 1: La regla de contención del `manager`**
+- [x] **Step 1: La regla de contención del `manager`**
+
+  > Verificado: `apps/api/src/modules/staff/staff.service.spec.ts:393` abre el bloque «la contención del manager es un SUBCONJUNTO, no una intersección», con el caso que distingue el subconjunto de la intersección —«el acceso de {A, C} NO está en la lista de un gerente de {A, B}»— y el caso del alcance vacío.
 
 Es la regla más fácil de romper de este plan, y la que un guard ingenuo arruinaría. Un `manager`
 puede tocar solo accesos **cuyo conjunto de sucursales esté contenido en el suyo**, y nunca
@@ -464,14 +488,18 @@ no puede tocar a un staff de A y C, porque C está fuera de su alcance aunque A 
 Y el `manager` **no ve** en la lista los accesos de sucursales que no gestiona. No es un
 filtro cosmético: el reveal del alias —que espeja el correo— es disclosure.
 
-- [ ] **Step 2: El PIN**
+- [x] **Step 2: El PIN**
+
+  > Verificado: `apps/api/src/modules/staff/staff.tokens.ts` declara la superficie de Auth que el módulo puede tocar (tres llamadas, y una cuarta rompe el typecheck), y `staff.service.spec.ts` afirma la compensación: el `deleteUser` cuando el insert de la membresía falla.
 
 `crypto.randomInt` server-side, entregado una sola vez. Nunca devuelto después. La
 generación del PIN y la del `auth.users` son la misma operación, y si el alta de la
 membresía falla se borra el `auth.users` creado — el mismo patrón compensado del onboarding
 (`businesses.service.ts:114-157`).
 
-- [ ] **Step 3: Rotar ≠ desactivar**
+- [x] **Step 3: Rotar ≠ desactivar**
+
+  > Verificado: `staff.service.ts` separa los dos métodos —`rotatePin` (`:782`) y `disableAccess` (`:857`)—, y `staff.service.spec.ts:1389` afirma «rotar cambia la contraseña y NO toca el ban ni el estado», mientras `:1400` afirma «desactivar sí manda el ban de §8, y sólo él lo manda».
 
 Son operaciones distintas y la UI lo dice, porque **un dueño que rota creyendo que cortó
 acceso es el peor resultado posible de esta pantalla**. Rotar cambia el PIN y no cierra
@@ -479,13 +507,17 @@ sesiones abiertas. Desactivar es `admin.updateUserById(id, { ban_duration: '8760
 sí mata las persistentes de tablet. El código tiene que hacer imposible confundirlas: dos
 métodos con nombres que no se parezcan, y un test que afirme que rotar **no** toca el ban.
 
-- [ ] **Step 4: Borrar es dar de baja, no borrar**
+- [x] **Step 4: Borrar es dar de baja, no borrar**
+
+  > Verificado: `staff.service.ts` → `remove` (`:930`) y `cutAccess` (`:1205`): `deleted_at` en la membresía **y** en sus filas de alcance, más el ban del `auth.users`; el alias no se recicla y el borrado físico no está expuesto.
 
 `deleted_at` en la membresía **y** en sus filas de alcance, más el ban del `auth.users`. El
 alias no se recicla, y el conteo de "quién estuvo aquí" sigue siendo posible. El borrado
 físico queda como operación separada y no expuesta en la v1.
 
-- [ ] **Step 5: Editar el alias**
+- [x] **Step 5: Editar el alias**
+
+  > Verificado: `staff.service.ts` → `updateAlias` (`:556`), que mueve el `alias` y el `auth.users.email` en la misma operación, con `revertAlias` (`:1599`) para el camino que falla; el aviso de dominio no entregable lo da el contrato, no el servicio.
 
 Actualiza `business_members.alias` y `auth.users.email` en la misma operación, validando
 formato y unicidad. Si el dominio nuevo no termina en `.role.ec`, la respuesta incluye el
@@ -493,7 +525,9 @@ aviso de que ese correo puede recibir mensajes de verdad — que es información
 necesita y que solo él puede actuar. Tras cambiar el alias **el PIN no cambia**: son dos
 datos independientes.
 
-- [ ] **Step 6: Tests**
+- [x] **Step 6: Tests**
+
+  > Verificado: `apps/api/src/modules/staff/staff.service.spec.ts` (1231 líneas en el commit `84933df`) cubre la contención, la entrega única del PIN, la compensación y que ninguna operación devuelva el PIN después de crearlo.
 
 Sin HTTP todavía. Cubrir la contención del manager con el caso de subconjunto que la
 distingue del caso de intersección, la entrega única del PIN, la compensación cuando falla
@@ -511,7 +545,9 @@ la membresía, y que ni una sola operación devuelva el PIN después de crearlo.
 - Consumes: el servicio (Task 3), `can_manage_location`.
 - Produce: la superficie HTTP que el panel consume.
 
-- [ ] **Step 1: El guard, reemplazado**
+- [x] **Step 1: El guard, reemplazado**
+
+  > Verificado: el servicio pregunta a la base por la sesión y por el alcance —`staff.service.ts` → `reaches` (`:1391`), `assertCanReachMember` (`:1404`), `assertWithinReach` (`:1424`)— y `apps/api/src/database/business-membership.ts` es la pieza que decide, en SQL.
 
 El guard de rol de negocio de Nest **se reemplaza** por `can_manage_location`. No por
 `business_member_role`: el TTL de sesión es una promesa de §5.2 y esta API escribe con
@@ -522,7 +558,9 @@ Esa es la razón por la que el servicio tiene que preguntar por la sesión en su
 sesión y no confiar en que alguien más lo hizo: son dos contextos distintos con dos
 fronteras distintas, y lo inaceptable es que diverjan.
 
-- [ ] **Step 2: Las nueve rutas**
+- [x] **Step 2: Las nueve rutas**
+
+  > Verificado: `apps/api/src/modules/staff/staff.controller.ts` expone las ocho de `businesses/:businessId/staff` —`GET`, `POST`, `PATCH :memberId`, `PATCH :memberId/alias`, `POST :memberId/rotate`, `POST :memberId/disable`, `POST :memberId/enable`, `DELETE :memberId`— y `staff-session.controller.ts` expone la novena, `POST /staff/session`. Commit `224310c`.
 
 | Ruta | Quién |
 | --- | --- |
@@ -536,13 +574,17 @@ fronteras distintas, y lo inaceptable es que diverjan.
 | `DELETE /businesses/:id/staff/:memberId` | owner |
 | `POST /staff/session` | cualquier miembro |
 
-- [ ] **Step 3: El alta no crea owners**
+- [x] **Step 3: El alta no crea owners**
+
+  > Verificado: el servicio rechaza el alta con un **422** (`staff.service.ts:1724`) y el contrato ofrece `CREATABLE_BUSINESS_MEMBER_ROLES = ["manager", "staff"]` en `packages/commons/src/business/enums/business-member-role.ts`, que es el subconjunto ofertable, no una prohibición del schema.
 
 `role` del cuerpo de creación acepta `manager | staff`. Un `owner` en el cuerpo es un
 `422`, con un mensaje que diga por qué: el dueño es quien creó el negocio. El schema de
 `commons` lo expresa, y la base lo vuelve imposible igual.
 
-- [ ] **Step 4: `POST /staff/session` sella, y solo sella**
+- [x] **Step 4: `POST /staff/session` sella, y solo sella**
+
+  > Verificado: `staff.service.ts` → `stampSession` (`:213`) y `sealAndExplain` (`:277`); el controlador es `apps/api/src/modules/staff/staff-session.controller.ts`.
 
 Actualiza `last_authenticated_at` del que pregunta. Devuelve el estado de sesión del §5.2.
 Es la operación que hace que la columna que hoy está en `NULL` para todo el mundo empiece a
@@ -560,17 +602,23 @@ tener sentido, y la que el Plan 1 dejó anotada como la que faltaba.
 **Interfaces:**
 - Produce: dos endpoints que rechazan identificadores de un dominio sin buzón.
 
-- [ ] **Step 1: Los tests que fallan**
+- [x] **Step 1: Los tests que fallan**
+
+  > Verificado: `apps/api/src/modules/auth/auth.service.spec.ts` tiene los casos del alias sin bandeja en ambos sentidos (commit `dbaed84`, +41 líneas de spec).
 
 Un correo bajo `.role.ec` en `change-email` → `422`; el mismo en `forgot-password` → `422`.
 Un alias de dominio propio **pasa** el flujo normal, porque su destinatario es real.
 
-- [ ] **Step 2: Implementar, en los dos sentidos**
+- [x] **Step 2: Implementar, en los dos sentidos**
+
+  > Verificado: `apps/api/src/modules/auth/auth.service.ts:117` rechaza con `isDeliverableAlias` el identificador sin bandeja, en `change-email` y en `forgot-password`. **La regla se escribe al revés de la que el plan propone, y está escrito por qué**: el plan hablaba de `isRoleEcAlias`, y lo que quedó es `isDeliverableAlias` —pregunta si hay una bandeja detrás—, porque un alias de dominio propio **sí** puede ser legítimo. La razón está en el docblock de `auth.service.ts:78-95` y en el addendum §A.4 del ADR-0013.
 
 En ambos endpoints. Un alias de dominio propio no se toca, y el motivo de no bloquearlo es
 justo el que hace legítimo el alias propio: el correo va a una bandeja que existe.
 
-- [ ] **Step 3: El borrado de cuenta tiene que detachment, no cascada**
+- [x] **Step 3: El borrado de cuenta tiene que detachment, no cascada**
+
+  > Verificado: `apps/api/src/modules/auth/auth.service.ts:643-652` —el borrado responde **409 antes de destruir nada** cuando el llamador sigue siendo el dueño vivo, y el camino desacopla la membresía antes de borrar el perfil. Commit `96a83d8` («el 409 deja de prometer una puerta que ya no abre»).
 
 La cadena `auth.users → profiles → business_members` es toda `ON DELETE CASCADE`, y la
 Task 1 puso un trigger `before delete` que levanta `R0002` sobre la fila de un dueño. El
@@ -600,7 +648,9 @@ trigger y el borrado de cuenta falle sin explicación.
 **Interfaces:**
 - Produce: un predicado único, con cada llamador declarando qué exige.
 
-- [ ] **Step 1: El helper, y lo que NO hace**
+- [x] **Step 1: El helper, y lo que NO hace**
+
+  > Verificado: `apps/api/src/database/business-membership.ts` (170 líneas, commit `d266e42`) expone `membershipRole`, que devuelve **el rol**, no un «¿puedo?»; y `apps/api/src/modules/businesses/businesses.repository.ts:718` lo expone como `roleOf`.
 
 El helper responde **un hecho**: qué rol tiene quien pregunta en este negocio. No responde
 "¿puedo?" — eso es de cada llamador, y por eso la consolidación no abre acceso a nadie por
@@ -611,7 +661,9 @@ accidente.
 async roleOf(businessId: string): Promise<BusinessMemberRole | null>
 ```
 
-- [ ] **Step 2: Cada llamador declara su exigencia**
+- [x] **Step 2: Cada llamador declara su exigencia**
+
+  > Verificado: el docblock de `business-membership.ts` muestra el patrón —el llamador declara el rol que exige sobre el hecho—, y `businesses.repository.ts` es el único hogar del predicado, con las otras réplicas delegando.
 
 `isOwner` sigue siendo owner-only para quien hoy lo es. Lo que cambia es que la respuesta
 viene del modelo de membresías y no de `business_ownership`, para que cuando Plan 3
@@ -623,7 +675,9 @@ puede dejar escrito de tres maneras distintas. El comentario de
 `businesses.service.ts:731-735` ya lo dice — "is this my business?" termina respondido de
 tres maneras levemente distintas.
 
-- [ ] **Step 3: Verificar que nadie amplió acceso**
+- [x] **Step 3: Verificar que nadie amplió acceso**
+
+  > Verificado: `apps/api/src/modules/businesses/business-membership.db.spec.ts` (482 líneas en `d266e42`) afirma el resultado para owner, manager, staff y no-miembro, y `apps/api/src/modules/businesses/businesses.repository.spec.ts:43` afirma `roleOf` y `ownedBusinessIds`.
 
 Un test por llamador que afirme el resultado para owner, manager, staff y no-miembro,
 **antes y después**. La consolidación que abre un permiso es una regresión, no una mejora.

@@ -480,6 +480,13 @@ git commit -m "feat(admin): pestaña Plan con asignación manual"
       copiado —con `VITE_SITE_URL=https://role.app` el paquete da **177 pass / 0 fail**—, y la
       rama **no toca `apps/landing`** (`git diff 1902541..HEAD -- apps/landing` sale vacío).
       API **2996 pass / 0 fail**, admin **677/0**, móvil **1008/0**, commons 0 fallos.
+
+      > **Actualizado por el Plan 6 (2026-10-22).** La medición de arriba **se queda como
+      > se midió**: el test esperaba `https://role.app/` porque el dominio del producto
+      > entonces era ese. El Plan 6 movió el dominio a `role.ec` —el que se adquirió—, y
+      > ese test (`apps/landing/src/lib/__tests__/seo.test.ts:66`) ahora espera
+      > `https://role.ec/`. La deuda del dominio, y la reparación que la cerró, están en
+      > `docs/security-debt.md` §8.
 - [x] `bunx turbo run test --force --continue` (el caché de turbo no incluye las env de las apps).
       — corrido con el caché apagado: los mismos números; el único rojo es el de `landing` por la
       env local, idéntico a la línea base.

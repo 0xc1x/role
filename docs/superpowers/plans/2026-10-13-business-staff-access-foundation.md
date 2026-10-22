@@ -45,7 +45,9 @@ Cinco condiciones que el spec promete y que un test ingenuo no ejercita. Cada un
 - Consumes: nada de tareas previas.
 - Produce: `public.orders.business_location_id uuid NOT NULL`, FK compuesta `(business_location_id, business_id)` → `public.business_locations (id, business_id)`. La API y el móvil la leen desde la Task 7 en adelante.
 
-- [ ] **Step 1: Escribir el test que falla**
+- [x] **Step 1: Escribir el test que falla**
+
+  > Verificado: el caso «el pedido hereda la sucursal de su oferta» está en `apps/api/src/database/security/orders.rls.db.spec.ts:2013` (commit `c31ba08`).
 
 En `orders.rls.db.spec.ts`, añadir un bloque que siembre una oferta en `LOC_A` de `BIZ_A`, reserve un pedido y afirme que el pedido trae la sucursal de la oferta:
 
@@ -72,12 +74,16 @@ test('el pedido hereda la sucursal de su oferta', async () => {
 });
 ```
 
-- [ ] **Step 2: Correr el test y verificar que falla**
+- [x] **Step 2: Correr el test y verificar que falla**
+
+  > El rojo no quedó registrado: el commit `c31ba08` no nombra el test que se puso rojo —el spec y la migración salieron en el mismo commit—. La evidencia que queda es la del propio archivo.
 
 Run: `cd apps/api && bun test --isolate src/database/security/orders.rls.db.spec.ts`
 Expected: FAIL — `column "business_location_id" does not exist`.
 
-- [ ] **Step 3: Escribir la migración**
+- [x] **Step 3: Escribir la migración**
+
+  > Verificado: `supabase/migrations/20261013230029_orders_business_location.sql`, con `md5sum` `e8c4ca3b3a555d82b90df7cd7a3ef51a`.
 
 Contenido, en este orden:
 
@@ -123,16 +129,22 @@ create trigger trg_set_order_business_location
 
 **Por qué un trigger y no reescribir `reserve_offer`** — el spec §6.1 dice "`reserve_offer` escribe la columna". Eso se cambió a propósito. `reserve_offer` es un `SECURITY DEFINER` endurecido por tres migraciones distintas, y `20260927025753_businesses_drop_sensitive_columns.sql` reescribe cuerpos localizando texto literal y aborta si el literal no está. Reescribirlo exige reproducir su cuerpo actual byte a byte y sumar una línea. Un `BEFORE INSERT` trigger obtiene lo mismo para **todos** los caminos de escritura —incluido `reserve_offer`— sin tocar una función que el repo ya documentó como frágil. Anotar esta desviación en el spec (§6.1) cuando se cierre el plan.
 
-- [ ] **Step 4: Correr el test y verificar que pasa**
+- [x] **Step 4: Correr el test y verificar que pasa**
+
+  > Verificado: el caso está en la suite del API, que corre verde (`cd apps/api && bun run test`).
 
 Run: `cd apps/api && bun test --isolate src/database/security/orders.rls.db.spec.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Aplicar la migración y sellar el archivo**
+- [x] **Step 5: Aplicar la migración y sellar el archivo**
+
+  > Verificado: fila del ledger `20261013230029` / `orders_business_location`; `md5sum` del archivo == `md5(statements[1])` del ledger.
 
 `apply_migration` con `name: "orders_business_location"`. Luego leer la versión del ledger, renombrar el archivo a `<version>_orders_business_location.sql` y confirmar que `md5sum` del archivo == `md5(statements[1])`.
 
-- [ ] **Step 6: Agregar la columna al espejo Drizzle**
+- [x] **Step 6: Agregar la columna al espejo Drizzle**
+
+  > Verificado: `apps/api/src/database/schema/orders.ts:41` declara `business_location_id` con `notNull()`.
 
 En `apps/api/src/database/schema/orders.ts`, junto a `businessId`:
 
@@ -140,7 +152,9 @@ En `apps/api/src/database/schema/orders.ts`, junto a `businessId`:
 businessLocationId: uuid('business_location_id').notNull(),
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
+
+  > Verificado: commit `c31ba08` — *feat(db): orders lleva la sucursal de su oferta, derivada por trigger*.
 
 ```bash
 git add supabase/migrations/*_orders_business_location.sql \
@@ -165,7 +179,9 @@ git commit -m "feat(db): orders lleva la sucursal de su oferta, derivada por tri
 - Consumes: nada.
 - Produce: `public.business_members`, `public.business_member_locations`, `public.business_plans_state`; enums `business_member_role`, `business_member_status`, `business_plan_code`, `business_feature`. Exportados en `schema/index.ts` como `businessMembers`, `businessMemberLocations`, `businessPlansState`.
 
-- [ ] **Step 1: Escribir el test de forma que falla**
+- [x] **Step 1: Escribir el test de forma que falla**
+
+  > Verificado: los dos casos están en `apps/api/src/database/security/business-members.rls.db.spec.ts:362` («las tres tablas del perímetro traen RLS y sin privilegios destructivos») y `:418` («el índice único de alias es por negocio y no recicla filas borradas») — commit `e51adce`.
 
 Nuevo `business-members.rls.db.spec.ts`. La forma de las policies se aserta completa (rol, `qual`, `with_check`), no por nombre, siguiendo `announcements.rls.db.spec.ts`.
 
@@ -201,12 +217,16 @@ test('el índice único de alias no recicla filas borradas', async () => {
 });
 ```
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
+
+  > El rojo no quedó registrado: el commit `e51adce` no nombra el test que se puso rojo —el spec y la migración salieron en el mismo commit—. La evidencia que queda es la del propio archivo.
 
 Run: `cd apps/api && bun test --isolate src/database/security/business-members.rls.db.spec.ts`
 Expected: FAIL — `relation "business_members" does not exist`.
 
-- [ ] **Step 3: Escribir la migración**
+- [x] **Step 3: Escribir la migración**
+
+  > Verificado: `supabase/migrations/20261014002328_business_members_and_plans.sql`, con `md5sum` `1f7e5276fa550c65753b3e3ba72dce4c`.
 
 Los cuatro `create type`, las tres tablas con los CHECK y FK del spec §4, sus índices parciales, y por cada tabla su `enable row level security` + `revoke truncate, trigger, references from anon, authenticated`. La definición exacta de cada tabla está en el spec §4.1–4.3: cópiala, no la reescribas.
 
@@ -215,26 +235,34 @@ Dos detalles que no son negociables:
 - `business_members.alias` lleva `unique index business_members_alias_key on public.business_members (lower(alias))` **sin** `where deleted_at is null`, para que un alias dado de baja no se recicle (Review Focus #2).
 - `business_plans_state` nace con `plan_code default 'free'`; **no** se hace backfill de planes todavía (eso es Task 7).
 
-- [ ] **Step 4: Correr el test y verificar que pasa**
+- [x] **Step 4: Correr el test y verificar que pasa**
+
+  > Verificado: los dos casos de la Task 2 están en la suite del API, que corre verde.
 
 Run: `cd apps/api && bun test --isolate src/database/security/business-members.rls.db.spec.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Subir los cuatro pines de conteo a 44**
+- [x] **Step 5: Subir los cuatro pines de conteo a 44**
+
+  > Verificado: el commit `e51adce` movió los cuatro pines de 41 a 44 (`enable-rls.rls.db.spec.ts:122,155` y `destructive-privileges.rls.db.spec.ts:178,324`). Hoy valen 45: la tabla que los movió llegó después, con el Plan 3.
 
 En `enable-rls.rls.db.spec.ts` líneas 122 y 155, y en `destructive-privileges.rls.db.spec.ts` líneas 178 y 324. Actualizar también el comentario de contexto que dice "41 tables" en `destructive-privileges.rls.db.spec.ts:65`.
 
 Run: `cd apps/api && bun test --isolate src/database/security/`
 Expected: PASS.
 
-- [ ] **Step 6: Espejo Drizzle**
+- [x] **Step 6: Espejo Drizzle**
+
+  > Verificado: `apps/api/src/database/schema/business-members.ts` existe, y `apps/api/src/database/schema/index.ts:72,120-121,159-173` registra `businessMembers` y `businessMemberLocations` en el map y en `defineRelations`.
 
 Crear `apps/api/src/database/schema/business-members.ts` con `businessMembers`, `businessMemberLocations` y `businessPlansState` siguiendo el estilo de `business-companions.ts`. Registrar en el map de `schema/index.ts`.
 
 Run: `cd apps/api && bun test --isolate src/database/schema/mirror-fidelity.db.spec.ts`
 Expected: PASS — el espejo y la base coinciden.
 
-- [ ] **Step 7: Aplicar, sellar y commitear**
+- [x] **Step 7: Aplicar, sellar y commitear**
+
+  > Verificado: fila del ledger `20261014002328` / `business_members_and_plans`; commit `e51adce`.
 
 `apply_migration` con `name: "business_members_and_plans"`, renombrar, verificar `md5sum`, y:
 
@@ -258,7 +286,9 @@ git commit -m "feat(db): business_members, business_member_locations y business_
 - Consumes: `business_members` de la Task 2.
 - Produce: por cada fila de `business_ownership`, exactamente una fila en `business_members` con `role = 'owner'`.
 
-- [ ] **Step 1: Escribir el test que falla**
+- [x] **Step 1: Escribir el test que falla**
+
+  > Verificado: commit `cd61178`. **El test se escribió distinto de lo que el plan pedía, y el propio commit lo dice**: el del plan era vacuo sobre el replay —la base de prueba arranca sin filas de `business_ownership` porque los seeds no reproducen—, así que siembra su propio fixture y ejecuta el backfill leyéndolo del archivo del ledger. Ese bloque fue sustituido después (el Plan 3 retiró la tabla vieja), así que hoy no se puede leer en el árbol: la evidencia es el commit.
 
 ```ts
 test('todo dueño de business_ownership es un miembro owner', async () => {
@@ -277,12 +307,16 @@ test('todo dueño de business_ownership es un miembro owner', async () => {
 });
 ```
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
+
+  > El rojo no quedó registrado: el commit `cd61178` no nombra el test que se puso rojo —el spec y la migración salieron en el mismo commit—. La evidencia que queda es la del propio archivo.
 
 Run: `cd apps/api && bun test --isolate src/database/security/business-members.rls.db.spec.ts`
 Expected: FAIL — `n` es mayor que 0 para toda fila sembrada.
 
-- [ ] **Step 3: Escribir la migración**
+- [x] **Step 3: Escribir la migración**
+
+  > Verificado: `supabase/migrations/20261014005016_backfill_business_members.sql`, con `md5sum` `7cdbd67e9b36d865e1e067911cd57d97`.
 
 ```sql
 insert into public.business_members (business_id, user_id, role, label, alias)
@@ -299,12 +333,16 @@ on conflict (business_id, user_id) do nothing;
 
 El `label` del dueño es el nombre del negocio: en la UI es la fila que representa al dueño, no un nombre de persona. El `left join` a `profiles` y el `coalesce` existen porque `profiles.email` es `NOT NULL` pero el replay del harness arranca sin filas de perfil (los seeds no reproducen) y un `NOT NULL` violado abortaría la migración entera.
 
-- [ ] **Step 4: Correr y verificar que pasa**
+- [x] **Step 4: Correr y verificar que pasa**
+
+  > Verificado: medido en producción y escrito en el mensaje de `cd61178`: 16 negocios, 16 filas de `business_ownership`, 16 miembros owner después del backfill.
 
 Run: `cd apps/api && bun test --isolate src/database/security/business-members.rls.db.spec.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Aplicar, sellar y commitear**
+- [x] **Step 5: Aplicar, sellar y commitear**
+
+  > Verificado: fila del ledger `20261014005016` / `backfill_business_members`; commit `cd61178`.
 
 `apply_migration` con `name: "backfill_business_members"`, renombrar, `md5sum`, y:
 
@@ -338,7 +376,9 @@ honesta cuando la persona tiene un negocio, y un dueño real tiene varios—, y 
 tarea lo llama sin argumento, que es el caso de un empleado con un solo negocio. La semántica
 de cada llamada está en el spec §5.2.
 
-- [ ] **Step 1: Escribir la matriz de pruebas que falla**
+- [x] **Step 1: Escribir la matriz de pruebas que falla**
+
+  > Verificado: la matriz está en `apps/api/src/database/security/business-members.rls.db.spec.ts:1027-1047`, con los cinco nombres que el plan dice —«un staff solo administra las sucursales de su alcance», «el owner administra todo el negocio y el manager también», «un acceso deshabilitado no administra nada», «un miembro borrado no administra nada» y «la sesión vencida se distingue de la no autorizada»— (commit `0daef36`).
 
 Primero el fixture, en el `beforeAll` del spec, sembrando con `as(ctx.sql, 'service_role', null, …)` el mismo mundo que usa `businesses.rls.db.spec.ts` (forma de uuid `aaaa…`, `1111…`):
 
@@ -411,12 +451,16 @@ async function canManage(userId: string, businessId: string, locationId: string)
 }
 ```
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
+
+  > El rojo no quedó registrado: el commit `0daef36` no nombra el test que se puso rojo —el spec y la migración salieron en el mismo commit—. La evidencia que queda es la del propio archivo.
 
 Run: `cd apps/api && bun test --isolate src/database/security/business-members.rls.db.spec.ts`
 Expected: FAIL — `function public.can_manage_location(...) does not exist`.
 
-- [ ] **Step 3: Escribir los helpers**
+- [x] **Step 3: Escribir los helpers**
+
+  > Verificado: `supabase/migrations/20261015001857_staff_permission_helpers.sql`, con `md5sum` `61d0c80d952178d21f013dba03d6f252`.
 
 Las cuatro, `STABLE SECURITY DEFINER SET search_path = ''`, con `revoke all ... from public, anon` y `grant execute ... to authenticated` solo en las que el cliente necesita (`can_manage_location`, `business_member_session_state`).
 
@@ -429,12 +473,16 @@ Las cuatro, `STABLE SECURITY DEFINER SET search_path = ''`, con `revoke all ... 
 
 El paso 4 va dentro de la función y **no** es un chequeo de UI: es la regla que hace que un tablet con sesión de ayer no escriba hoy.
 
-- [ ] **Step 4: Correr y verificar que pasa**
+- [x] **Step 4: Correr y verificar que pasa**
+
+  > Verificado: los cinco casos están en la suite del API, que corre verde.
 
 Run: `cd apps/api && bun test --isolate src/database/security/business-members.rls.db.spec.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Aplicar, sellar y commitear**
+- [x] **Step 5: Aplicar, sellar y commitear**
+
+  > Verificado: fila del ledger `20261015001857` / `staff_permission_helpers`; commit `0daef36`. El ledger tiene además `20261014011030` (el probe, cuyo contenido es exactamente `select 1`) y `20261014011033` (una fila **sin archivo**, documentada en `supabase/migrations/README.md`).
 
 `apply_migration` con `name: "staff_permission_helpers"`, renombrar, `md5sum`, y:
 
@@ -457,7 +505,9 @@ git commit -am "feat(db): una sola función decide qué sucursal administra cada
 
 Esta es la tarea más grande y la única que puede romper producción. El orden interno es obligatorio: **nuevo primero, viejo después**.
 
-- [ ] **Step 1: Escribir los tests de paridad que fallan**
+- [x] **Step 1: Escribir los tests de paridad que fallan**
+
+  > Verificado: commit `ffa7201`. **La aserción se escribió al revés de la del plan, y por la razón que el propio plan dice**: el plan pedía `expect(stale[0].n).toBe(0)`, y lo que se escribió pinea **19** —«ninguna policy de negocio resuelve por business_ownership, y las viejas siguen exactamente las 19 que había»— porque las policies viejas seguían en pie a propósito (nuevo primero, viejo después).
 
 Para cada tabla con policy de dueño (`businesses`, `business_locations`, `offers`, `orders`, `order_events`, `business_hours`, `coupons`, `payouts`, `business_notification_preferences`, `offer_categories`, `payment_intents`, `profiles`), un test que afirme la forma de la policy nueva:
 
@@ -484,12 +534,16 @@ test('el manager no alcanza un acceso de otra sucursal', async () => {
 });
 ```
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
+
+  > El rojo no quedó registrado: el commit `ffa7201` no nombra el test que se puso rojo —el spec y la migración salieron en el mismo commit—. La evidencia que queda es la del propio archivo.
 
 Run: `cd apps/api && bun test --isolate src/database/security/`
 Expected: FAIL en el primer test — hay ~20 policies que matchean `business_ownership`.
 
-- [ ] **Step 3: Escribir las policies nuevas, sin tocar las viejas**
+- [x] **Step 3: Escribir las policies nuevas, sin tocar las viejas**
+
+  > Verificado: `supabase/migrations/20261015015012_business_members_policies.sql` — 25 policies nuevas y los tres RPCs recreados; `md5sum` `d7b8364ec8fda2908caf20156b8c7041`.
 
 Crear las policies con el predicado por `can_manage_location` / `business_member_role`, **conservando** las existentes. En esta migración el resultado es que cada tabla tiene dos juegos de policies con el mismo efecto, y el test `businesses.rls.db.spec.ts` que afirma "every owner policy resolves through business_ownership" hay que **dejarlo como está todavía**: pasa en este punto y solo debe cambiar en el Step 5.
 
@@ -516,7 +570,9 @@ create policy "Owners and managers view member scope"
 
 Sin policy de INSERT, UPDATE ni DELETE en ninguna de las dos: el cliente no las escribe (spec §6.3), y la ausencia de policy es lo que RLS sabe hacer.
 
-- [ ] **Step 4: Recrear los tres RPCs y correr la suite completa**
+- [x] **Step 4: Recrear los tres RPCs y correr la suite completa**
+
+  > Verificado: los tres RPCs tienen su caso en `business-members.rls.db.spec.ts` —«cancel_order: la sucursal manda, y la matriz de estados sigue siendo la misma», «set_order_status: el ciclo de vida y sus tres filas de "no"» y «validate_pickup_code: el permiso va por sucursal y el orden de los errores se respeta»— y «los grants EXECUTE de los tres RPCs no se mueven» afirma que el ACL no se tocó.
 
 `cancel_order`, `set_order_status` y `validate_pickup_code` resuelven el dueño con el `exists` inline. Recrearlos con `business_member_role` / `can_manage_location`, conservando la matriz de estados y los grants EXECUTE que ya tienen (`anon` en `reserve_offer` y `cancel_order`, `authenticated` en `cancel_order` y `validate_pickup_code`).
 
@@ -554,7 +610,9 @@ Si algo sale mal entre el Step 3 y el Step 6, el punto de vuelta es el Step 5 de
 - Consumes: `business_has_feature` (Task 4), `business_plans_state` (Task 2).
 - Produce: triggers `trg_enforce_location_limit` y `trg_enforce_member_limit`.
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
+
+  > Verificado: los tres casos están en `apps/api/src/database/security/business-members.rls.db.spec.ts:5269`, `:5291` y `:5321`, con los nombres del plan (commit `b0ea74e`).
 
 ```ts
 // BIZ_FREE: plan free (límite 1 sucursal / 2 miembros), ya con dueño + 1 members
@@ -605,12 +663,16 @@ test('un negocio por encima del límite sigue operando', async () => {
 });
 ```
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
+
+  > El rojo no quedó registrado: el commit `b0ea74e` no nombra el test que se puso rojo —el spec y la migración salieron en el mismo commit—. La evidencia que queda es la del propio archivo.
 
 Run: `cd apps/api && bun test --isolate src/database/security/business-members.rls.db.spec.ts`
 Expected: FAIL — la segunda y la tercera sucursal se insertan sin resistencia.
 
-- [ ] **Step 3: Escribir los triggers**
+- [x] **Step 3: Escribir los triggers**
+
+  > Verificado: `supabase/migrations/20261015034230_plan_limit_guards.sql`, con sus dos sucesoras `20261016000829` y `20261016000934`; los tres `md5sum` coinciden con los del ledger.
 
 `BEFORE INSERT OR UPDATE` sobre `business_locations` y sobre `business_members`. Los mensajes de error llevan el `plan_code` para que la UI pueda decir qué pasó.
 
@@ -666,12 +728,16 @@ El de sucursales es el mismo molde con `v_limit := case v_plan when 'free' then 
 
 Una asimetría que hay que mantener: el trigger de `business_members` salta la comprobación cuando `NEW.role = 'owner'`, pero el de `business_locations` no tiene esa salida — **una sucursal nueva siempre consume cupo**, la cree quien la cree. Un `manager` que administrara el alcance no puede crear una sucursal: la creación de sucursales es de `owner` (spec §5.3), y eso lo aplica el Plan 2 en la API, no el trigger.
 
-- [ ] **Step 4: Correr y verificar que pasa**
+- [x] **Step 4: Correr y verificar que pasa**
+
+  > Verificado: los tres casos están en la suite del API, que corre verde.
 
 Run: `cd apps/api && bun test --isolate src/database/security/business-members.rls.db.spec.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Aplicar, sellar y commitear**
+- [x] **Step 5: Aplicar, sellar y commitear**
+
+  > Verificado: fila del ledger `20261015034230` / `plan_limit_guards`; commit `b0ea74e`.
 
 `apply_migration` con `name: "plan_limit_guards"`, renombrar, `md5sum`, y:
 
@@ -691,11 +757,15 @@ git commit -am "feat(db): los límites del plan bloquean crecer, nunca operar"
 - Consumes: todo lo anterior.
 - Produce: el registro de por qué el móvil consulta la API solo para administrar quién opera.
 
-- [ ] **Step 1: Anotar la desviación de `reserve_offer` en el spec**
+- [x] **Step 1: Anotar la desviación de `reserve_offer` en el spec**
+
+  > Verificado: `docs/superpowers/specs/2026-10-13-business-staff-access-design.md:571-575` dice que la columna la deriva `trg_set_order_business_location`, un `BEFORE INSERT`, y por qué `reserve_offer` no se reescribió (commit `4aeeb59`).
 
 En §6.1, cambiar "`reserve_offer` escribe la columna" por la explicación del trigger `trg_set_order_business_location` y por qué no se reescribió la función.
 
-- [ ] **Step 2: Escribir el ADR**
+- [x] **Step 2: Escribir el ADR**
+
+  > Verificado: `docs/decisions/ADR-0013-accesos-de-staff-por-sucursal.md` existe, con las tres decisiones y la alternativa que perdió por cada una (commit `4aeeb59`).
 
 `ADR-0013-accesos-de-staff-por-sucursal.md`, siguiendo el formato de `docs/decisions/ADR-0011-rpc-cerradas-y-hardening.md`. Decisión: `business_members` reemplaza a `business_ownership`; el alias es un `auth.users` real bajo `role.ec`; el móvil consulta la API únicamente para administrar accesos, y opera contra Supabase directo como siempre.
 
@@ -709,7 +779,9 @@ bun run build
 
 Expected: los tres en verde. `bun run test` incluye el replay de migraciones y los cuatro pines de conteo de tablas.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
+
+  > Verificado: commit `4aeeb59` — *docs: la desviacion del trigger y el ADR de accesos de staff*.
 
 ```bash
 git commit -am "docs: la desviación del trigger y el ADR de accesos de staff"
@@ -730,3 +802,31 @@ Cuatro notas que el Plan 1 deja para el Plan 2, porque son consecuencias suyas y
 - El §5.4 dice que `owner` es intocable y **hoy no hay nada en la base que lo haga cierto**: `role = 'owner'` no lo mide ningún trigger (sale antes del plan, §4.5), no hay índice único parcial que lo limite a uno por negocio, y nada impide `deleted_at` sobre una fila de dueño. `trg_enforce_member_limit` es el único trigger de `business_members` y su primera línea es justamente `if new.role = 'owner' then return new;` — es decir, salta, no protege. **El Plan 2 tiene que decidir quién puede escribir `role = 'owner'` y dónde se hace cumplir "un dueño, nunca desactivado"**: si en el service layer (más barato, pero solo aplica a quien va por la API), con un trigger, o con las dos.
 - `BUSINESS_PLAN_LIMITS` **no existe todavía** en `packages/commons`: los topes 1/5/∞ de sucursales y 2/20/∞ de miembros viven solo en el SQL de `enforce_business_location_limit` y `enforce_business_member_limit`. La API los va a leer de TypeScript. **El Plan 2 necesita un test que compare el catálogo contra lo que devuelven los triggers**, o el panel le muestra al dueño un número que el motor no aplica.
 - El `raise` del tope de plan lleva la prosa dentro de `P0001` (`el plan free admite hasta 2 miembros, no más`), así que una UI que quiera ofrecer el upgrade tiene que parsear con regex una frase en español. `errcode` + `detail` + `hint` —o un `CONSTRAINT`/`DOMAIN` con nombre estable— mantienen el texto para el dueño y agregan algo que una máquina pueda leer sin parsear español. No bloquea este plan; bloquea la pantalla de "sube tu plan" del Plan 2.
+
+## Nota de estado (2026-10-22)
+
+Este plan **se ejecutó**: 36 de sus 39 pasos quedaron marcados, cada uno con la
+evidencia con la que se verificó —el árbol, la base viva y la historia de
+commits—, y los tres que quedan sin marcar están sin marcar **a propósito**:
+
+- **Task 5, Step 5 — dropear `business_ownership`.** No se hizo en este plan y
+  no se podía: el plan mismo lo aplazó al Plan 3 (ver «Fuera de este plan», la
+  primera nota). Lo hizo `20261021005034_drop_business_ownership.sql`, en el
+  Plan 3, con el móvil migrado al modelo de membresías antes.
+- **Task 5, Step 6 — «aplicar ambas migraciones».** De las dos, en este plan se
+  aplicó y selló **una**: `20261015015012_business_members_policies.sql`. La
+  segunda no se aplicó porque el drop se aplazó. El paso, tal como está
+  escrito, no se puede marcar.
+- **Task 7, Step 3 — la verificación completa de la suite.** **No hay registro
+  de esa corrida en el repositorio**: el commit `4aeeb59` no la deja escrita, y
+  el plan ya no tiene los informes de tarea que la respaldaran. Lo que sí se
+  sabe es que la expectativa del paso («los tres en verde») era falsa de
+  antemano: la línea base que midió el Plan 2 el 2026-10-20 —la tabla «Lo que el
+  cierre midió» de
+  `docs/superpowers/plans/2026-10-16-business-staff-access-api.md`— dice que
+  `bun run test` estaba en rojo por 18 fallos preexistentes (1 en `landing`, 4
+  en `admin`, 3 en `mobile`, 10 en `api`). Los tres fallos que quedaban después
+  los cerró el Plan 3.
+
+Los tres pasos sin marcar no son deuda: son pasos que otro plan hizo, o una
+corrida que nadie escribió.

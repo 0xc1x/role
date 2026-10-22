@@ -853,6 +853,13 @@ git commit -m "feat(admin): pestañas en la ficha del negocio y equipo de sólo 
       configurado`, que espera `https://role.app/` y recibe el `VITE_SITE_URL=http://localhost:3001`
       del `.env` local copiado). La rama **no toca `apps/landing`** (`git diff main..HEAD --
       apps/landing` sale vacío), así que ese fallo pertenece a la línea base.
+
+      > **Actualizado por el Plan 6 (2026-10-22).** La medición de arriba **se queda como
+      > se midió**: el test esperaba `https://role.app/` porque el dominio del producto
+      > entonces era ese. El Plan 6 movió el dominio a `role.ec` —el que se adquirió—, y
+      > ese test (`apps/landing/src/lib/__tests__/seo.test.ts:66`) ahora espera
+      > `https://role.ec/`. La deuda del dominio, y la reparación que la cerró, están en
+      > `docs/security-debt.md` §8.
 - [x] E2E del móvil: `07-business-management` actualizado y verde. — **7/7 en 2.5 min, EXIT 0**
       (`/tmp/opencode/e2e-07-fixes.log`); tras el `preexport`, `global.css` queda **sin diff**: el
       generador reproduce el fichero commiteado en `738e0e3`.
