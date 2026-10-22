@@ -2912,3 +2912,38 @@ siguen leyéndose `free`; y los dos topes de `free` rechazan con `R0001` y el
 mismo mensaje de siempre —«el plan free admite hasta 2 miembros, no más» y «el
 plan free admite hasta 1 sucursal, no más»—, medido dentro de una transacción
 descartada.
+
+## Applied: `20261022023427_record_role_ec_domain`
+
+Applied via `apply_migration` on 2026-10-22. The file's `md5sum` is
+`b8f50abf39ad858ffa05141ad025b8b7` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `commit;` with no trailing newline
+and with exactly one backslash (the capture of the `regexp_replace` that moves a
+`mailto:` address).
+
+**Qué hace:** pone en `role.ec` las claves no sociales de `public.app_config` que
+todavía dijeran `role.app`, barre el enlace y el `mailto:` de las plantillas y
+componentes de correo, mueve los `slides.redirect_url` que apuntaban al sitio
+antiguo, y quita de `public.notify_business_pending()` el literal
+`'https://admin.role.app'`. **Cada barrido tiene la forma de lo que barre**, y la
+puerta final es su espejo exacto: una cuenta social (`facebook.com/role.app`) no se
+reescribe ni hace tropezar la migración; un dominio nuestro, sí.
+
+**En producción no cambia casi nada, y esa es la medida:** producción ya llevaba
+`role.ec` desde hacía meses (lo cambió una vía que no dejó fila en el ledger —el
+hueco que `docs/security-debt.md` §8 documentaba—). Lo que este archivo hace es
+**registrarlo**: el directorio de migraciones ahora describe la base que hay, y un
+`supabase db push` a un entorno nuevo termina en `role.ec` en vez de romperse.
+
+**Lo que sí cambia en producción (medido antes y después):** el `mailto:hola@role.app`
+del pie de correo "Footer principal (oscuro)", los tres `slides.redirect_url`
+inactivos que apuntaban a `https://role.app/about` y `https://role.app/for-business`,
+y el literal de reserva del enlace al panel dentro del trigger.
+
+**Las cuentas sociales siguen en `role.app`** (`facebook.com/role.app`,
+`instagram.com/role.app`, `tiktok.com/@role.app`, `youtube.com/@role.app`): son
+nombres de cuenta en dominio ajeno, y reescribirlos rompería cada pie de página.
+
+**Las dos migraciones anteriores que fallan en un replay siguen fallando**, y
+siguen fallando en su propia aserción —que se dispara antes de la reparación—, así
+que el conjunto de fallos fijado en `apps/api/test/supabase-platform.ts` no cambia.

@@ -778,10 +778,18 @@ export const KNOWN_REPLAY_FAILURES: readonly KnownReplayFailure[] = [
       '`contact.cities`; `20260926021657` touches `email_templates.body_html` and ' +
       'never `app_config`. So those four values were changed on the live project ' +
       'by a write path that left no ledger row — the same class of gap as the ' +
-      '`cancel_order` arity-2 drop documented in `20260906131000`. The fix is a ' +
-      'data migration recorded in the ledger, and it is NOT written here: this ' +
+      '`cancel_order` arity-2 drop documented in `20260906131000`. The fix was a ' +
+      'data migration recorded in the ledger, and it was NOT written then: this ' +
       'directory may not gain a file claiming to be history that did not happen, ' +
-      'and it may not be applied to production from this task.',
+      'and it may not be applied to production from that task. It was written ' +
+      'later, on 2026-10-22: `20261022023427_record_role_ec_domain.sql` puts ' +
+      'those values on `role.ec` (idempotently, and in the shapes each surface ' +
+      'actually has), and it is applied to production — whose values it does ' +
+      'NOT change, because production already carried them. It does repair the ' +
+      'END of a replay: the values are `role.ec` when the directory is ' +
+      'replayed. These two files still fail in a replay, and they still fail ' +
+      'at their OWN assertion — which fires before the repair — so the pinned ' +
+      'failure set is unchanged. What changed is that the repair exists.',
   },
   {
     file: '20260927141336_confirm_admin_domain.sql',
