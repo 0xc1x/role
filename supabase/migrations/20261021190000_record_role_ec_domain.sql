@@ -13,18 +13,24 @@
 --   links.admin_url        = https://admin.role.ec
 --   store.default / store.ios_url / store.play_url = https://app.role.ec
 --
--- Pero NINGUNA fila de `supabase_migrations.schema_migrations` escribe la fila
--- de `app_config` de `support.email`, `contact.hola_email`,
--- `contact.negocios_email`, `legal.contact_email` ni de los tres `store.*`:
--- esos valores se cambiaron en el proyecto vivo por una vía que no dejó
--- rastro en el ledger. Medido el 2026-10-21 sobre el ledger: `soporte@role.ec`,
+-- Pero NINGUNA fila de `supabase_migrations.schema_migrations` escribe esas
+-- cuatro filas de `app_config` CON EL VALOR `role.ec`. `20260821205638` las
+-- crea —sí lo hace, con el dominio viejo: `soporte@role.app`, `hola@role.app`,
+-- `negocios@role.app`, `legal@role.app`— y ninguna fila del ledger las cambia
+-- al dominio nuevo. De los tres `store.*` la afirmación es más fuerte: no hay
+-- NINGUNA fila que los escriba, con ningún valor; sólo aparecen mencionados en
+-- el comentario de dos migraciones, y el de `20260926021657` cuenta los tres
+-- entre los ocho valores de `app_config` que ya concordaban con el dominio del
+-- producto.
+--
+-- Medido el 2026-10-21 sobre el ledger: los literales `soporte@role.ec`,
 -- `hola@role.ec`, `legal@role.ec` y `https://app.role.ec` no aparecen en
 -- NINGUNA fila (0, 0, 0, 0); `negocios@role.ec` aparece en cuatro, pero
 -- ninguna de ellas escribe `app_config` — escriben el cuerpo de las plantillas
 -- y el valor de reserva del trigger, no la fila.
 --
--- Las otras tres sí tienen su fila: `privacy.contact_email` la escribe
--- `20260927053728`, `email.from` la escribe `20260830014803` y
+-- Los otros tres sí tienen su fila con el valor nuevo: `privacy.contact_email`
+-- la escribe `20260927053728`, `email.from` la escribe `20260830014803` y
 -- `links.admin_url` la escribe `20260927141336`. El directorio de
 -- migraciones, entonces, no describía la base que hay: es la deuda de
 -- `docs/security-debt.md` §8, la misma clase de hueco que `20260906131000`
@@ -85,19 +91,19 @@
 --      existe. Lo mueve la sección 6.
 --
 -- Y NADA MÁS cambia en producción: las claves de `app_config` ya están en
--- `role.ec` (sección 1, que no encuentra ninguna fila), el barrido del
--- enlace `https://role.app` de las plantillas y de los componentes ya lo
--- hizo el sellado `20260927053728` (sección 3, que no encuentra nada), y
--- las cuentas sociales se dejan como están (sección 1 y la aserción final).
+-- `role.ec` (sección 1, que no encuentra ninguna fila), el barrido del enlace
+-- de las plantillas y de los componentes ya lo hizo el sellado `20260927053728`
+-- (sección 3, que no encuentra nada), y las cuentas sociales se dejan como
+-- están (sección 1 y la aserción final).
 --
 -- IDEMPOTENTE
 --
 -- Correrlo dos veces no cambia nada: cada `update` toca sólo filas cuyo valor
--- todavía es el viejo, la semilla usa `on conflict do nothing`, el barrido
--- del `mailto:` enumera las direcciones que quedan (que después de la
--- primera pasada son ninguna), y la reescritura de la función hace nada si
--- el literal viejo ya no está en el cuerpo. El `do $verify$` del final
--- convierte la promesa en algo verificable en vez de algo declarado.
+-- todavía es el viejo, la semilla usa `on conflict do nothing`, el barrido del
+-- `mailto:` reescribe direcciones que después de la primera pasada no quedan,
+-- y la reescritura de la función hace nada si el literal viejo ya no está en
+-- el cuerpo. El `do $verify$` del final convierte la promesa en algo
+-- verificable en vez de algo declarado.
 --
 -- POR QUÉ `social.%` QUEDA EXENTO
 --
@@ -112,49 +118,77 @@
 -- también: es la misma razón por la que `20260927053728` y `20260927141336`
 -- lo exceptúan.
 --
--- Lo que sí se reescribe, en las claves no sociales, es el HOST. El mismo
--- `replace` sirve para los dos casos porque, fuera de `social.%`, el dominio
--- viejo aparece en `app_config` siempre como host: el dominio del correo
--- (`soporte@role.app` -> `soporte@role.ec`) o el host de la URL
--- (`https://admin.role.app` -> `https://admin.role.ec`).
---
+-- Lo que sí se reescribe, en las claves no sociales, es lo NUESTRO: el
+-- dominio de una dirección de correo (`soporte@role.app` -> `soporte@role.ec`)
+-- o el host de una URL (`https://admin.role.app` -> `https://admin.role.ec`).
+-- La sección 1 dice qué cuenta como nuestro y qué no.
+
 -- `email.from` —el remitente del correo saliente— entra en esa misma regla y
 -- no necesita un caso aparte: en producción vale `notificaciones@role.ec`, así
 -- que no se toca, y sólo se movería si todavía dijera `role.app`.
 --
--- LA PUERTA TIENE LA MISMA FORMA QUE EL BARRIDO
+-- LOS BARRIDOS TIENEN LA FORMA DE LO QUE BARREN
+--
+-- Un barrido de la cadena suelta `role.app` no sabe qué es nuestro dominio: no
+-- distingue `soporte@role.app` (nuestro) de `tiktok.com/@role.app` (el nombre
+-- de una cuenta de la marca en el dominio de otro). Por eso cada barrido
+-- mira la FORMA, y la forma es la que dice su sección:
+--
+--   - una DIRECCIÓN DE CORREO entera que sea nuestra: `local@role.app`;
+--   - una URL cuyo HOST sea nuestro: `https://role.app`,
+--     `https://<sub>.role.app`;
+--   - el ENLACE a nuestro host dentro de un cuerpo: `://role.app` o
+--     `://<sub>.role.app`;
+--   - el `mailto:` a nuestra dirección.
+--
+-- Y LA PUERTA TIENE LA MISMA FORMA QUE EL BARRIDO
 --
 -- La comprobación final no busca la cadena suelta `role.app`: busca las FORMAS
--- que los barridos de este archivo saben arreglar. `role.app` es también el
--- nombre de la cuenta de la marca en las plataformas de otros
--- (`facebook.com/role.app`), y una puerta que buscara la cadena suelta un día
--- se negaría a aplicar una migración por una cadena que no es un dominio
--- nuestro, y el motivo del fallo no se vería. El sellado `20260927053728` ya
--- lo hizo bien —su comprobación miraba `https://role.app`, que es un host—.
--- La sección 7 dice forma por forma.
+-- que los barridos de este archivo saben arreglar. Una puerta que buscara la
+-- cadena suelta un día se negaría a aplicar una migración por una cadena que
+-- no es un dominio nuestro, y el motivo del fallo no se vería. El sellado
+-- `20260927053728` ya lo hizo bien —su comprobación miraba `https://role.app`,
+-- que es un host—. La sección 7 dice forma por forma.
 
 begin;
 
--- 1. Las claves no sociales que todavía dicen `role.app`.
+-- 1. Las claves no sociales de `app_config`: la DIRECCIÓN y la URL.
 --
 -- `key not like 'social.%'` es la EXENCIÓN del archivo, y no es un detalle:
 -- los valores de `social.%` en producción contienen la cadena `role.app` como
--- NOMBRE DE CUENTA de la marca en el dominio de otro. `jsonb_typeof(value) =
--- 'string'` evita reescribir un valor que no sea texto (un array o un
--- objeto), donde `value #>> '{}'` devolvería el JSON entero y `to_jsonb(...)`
--- lo convertiría en una cadena.
+-- NOMBRE DE CUENTA de la marca en el dominio de otro.
 --
--- La condición `value #>> '{}' like '%role.app%'` es la que hace la operación
--- idempotente: si el valor ya es `role.ec`, la fila no entra. En producción
--- no entra ninguna, y ese es el motivo por el que esta sección no cambia
--- nada allí: las claves ya están donde deben.
+-- (a) LA DIRECCIÓN. El valor ENTERO tiene que ser una dirección de correo
+--     nuestra, `local@role.app`. Un `replace` del sufijo basta y conserva la
+--     parte local: `hola@role.app` -> `hola@role.ec`.
+--
+-- (b) LA URL. El HOST tiene que ser el nuestro: `role.app` o
+--     `<sub>.role.app`. Los dos `replace` son literales, y su forma es lo que
+--     hace que las cuentas sociales no se toquen: `facebook.com/role.app`
+--     tiene `/` delante de `role.app` (no un punto) y `tiktok.com/@role.app`
+--     tiene `@` delante; ninguna de las dos formas es `://role.app` ni
+--     `.role.app`. La condición del host tampoco las alcanza.
+--
+-- `jsonb_typeof(value) = 'string'` evita reescribir un valor que no sea texto
+-- (un array o un objeto), donde `value #>> '{}'` devolvería el JSON entero y
+-- `to_jsonb(...)` lo convertiría en una cadena.
 
+-- (a) La dirección de correo.
 update public.app_config
-   set value = to_jsonb(replace(value #>> '{}', 'role.app', 'role.ec')),
+   set value = to_jsonb(replace(value #>> '{}', '@role.app', '@role.ec')),
        updated_at = now()
  where key not like 'social.%'
    and jsonb_typeof(value) = 'string'
-   and value #>> '{}' like '%role.app%';
+   and value #>> '{}' ~ '^[A-Za-z0-9._%+-]+@role[.]app$';
+
+-- (b) La URL.
+update public.app_config
+   set value = to_jsonb(replace(replace(value #>> '{}', '://role.app', '://role.ec'), '.role.app', '.role.ec')),
+       updated_at = now()
+ where key not like 'social.%'
+   and jsonb_typeof(value) = 'string'
+   and value #>> '{}' ~ '^[A-Za-z][A-Za-z0-9+.-]*://([^/?#]+[.])?role[.]app([:/?#]|$)'
+   and (value #>> '{}' like '%://role.app%' or value #>> '{}' like '%.role.app%');
 
 -- 2. `links.admin_url`.
 --
@@ -165,7 +199,11 @@ update public.app_config
 --
 -- `on conflict do nothing` porque una fila existente es de otro dueño: si
 -- dijera `role.app`, la sección 1 ya la movió; si dice otra cosa, es una
--- decisión del operador y este archivo no la pisa.
+-- decisión del operador y este archivo no la pisa. PERO la puerta de la
+-- sección 7 exige el valor exacto `https://admin.role.ec`, así que un valor
+-- distinto hace que ESTA migración falle y no aplique NADA: el dominio del
+-- panel está confirmado, y un valor que no sea ese significa que alguien lo
+-- cambió a mano y que eso tiene que mirar una persona.
 
 insert into public.app_config (key, value, value_type, category, label, description, is_public, active)
 values ('links.admin_url', to_jsonb('https://admin.role.ec'::text), 'string', 'links',
@@ -174,77 +212,74 @@ values ('links.admin_url', to_jsonb('https://admin.role.ec'::text), 'string', 'l
         false, true)
 on conflict (key) do nothing;
 
--- 3. Plantillas y componentes: el ENLACE.
+-- 3. Plantillas y componentes: el ENLACE a nuestro host.
 --
--- El literal es `https://role.app`, y es el ENLACE: por eso no puede tocar una
--- dirección de correo ni el nombre de una cuenta social. Es idempotente, y en
--- producción no encuentra nada —el sellado `20260927053728` ya lo movió—.
+-- El enlace tiene dos formas: nuestro host pelado (`https://role.app/...`) y
+-- un subdominio nuestro (`https://admin.role.app/...`). Los dos `replace` son
+-- literales, y por lo mismo que en la sección 1 no tocan las cuentas
+-- sociales: `facebook.com/role.app` tiene `/` delante de `role.app` y
+-- `tiktok.com/@role.app` tiene `@` delante, y ninguna de las dos formas es
+-- `://role.app` ni `.role.app`.
+--
+-- DENTRO DE UN CUERPO NO SE PUEDE PREGUNTAR POR EL HOST: haría falta una
+-- captura, y este archivo lleva UN solo backslash, el de la sección 4. Por eso
+-- aquí la forma es el LITERAL. Una cuenta social no se toca, pero una URL de
+-- un tercero con `.role.app` en el CAMINO sí se reescribe: es el precio de
+-- poder arreglar un subdominio nuestro sin captura, y no hay ninguna URL así
+-- en las plantillas ni en los componentes de producción (medido el 2026-10-21:
+-- 9 plantillas y 4 componentes, y el único `role.app` es el `mailto:` del pie).
 
 update public.email_templates
-   set body_html = replace(body_html, 'https://role.app', 'https://role.ec'),
+   set body_html = replace(replace(body_html, '://role.app', '://role.ec'), '.role.app', '.role.ec'),
        updated_at = now()
  where deleted_at is null
-   and body_html like '%https://role.app%';
+   and (body_html like '%://role.app%' or body_html like '%.role.app%');
 
 update public.email_components
-   set html_content = replace(html_content, 'https://role.app', 'https://role.ec'),
+   set html_content = replace(replace(html_content, '://role.app', '://role.ec'), '.role.app', '.role.ec'),
        updated_at = now()
  where deleted_at is null
-   and html_content like '%https://role.app%';
+   and (html_content like '%://role.app%' or html_content like '%.role.app%');
 
--- 4. Plantillas y componentes: el `mailto:`.
+-- 4. Plantillas y componentes: el `mailto:` a nuestra dirección.
 --
 -- El pie de página "Footer principal (oscuro)" lleva
 -- `<a href="mailto:hola@role.app">Soporte</a>`, y `role.app` es un dominio en
 -- el que no se recibe correo: ese enlace no llega a nadie. Es la misma fuga
 -- que el enlace, con otra forma, y el barrido de la sección 3 no la alcanza
--- porque su literal es `https://role.app` y aquí el texto es `mailto:`.
+-- porque sus literales son `://role.app` y `.role.app`, y en un `mailto:` el
+-- `role.app` va detrás de un `@`, no de un punto.
 --
--- Un `mailto:` con `role.app` es SIEMPRE nuestro dominio, así que la forma
--- es inequívoca: no hay ningún `mailto:` a `role.app` que sea de otro. Por
--- eso el barrido es de la FORMA `mailto:` y no de la cadena suelta: un
+-- Un `mailto:` con `role.app` es SIEMPRE nuestro dominio, así que la forma es
+-- inequívoca: no hay ningún `mailto:` a `role.app` que sea de otro. Por eso
+-- el barrido es de la FORMA `mailto:` y no de la cadena suelta: un
 -- `@role.app` suelto en un cuerpo puede ser el nombre de una cuenta
 -- (`twitter.com/@role.app`), y reescribirlo rompería el enlace.
 --
--- Las direcciones se ENUMERAN y después se reescriben con un `replace`
--- literal, sin captura ni referencia: un regex con `\1` es exactamente lo que
--- `20260927141336` advierte (un backslash perdido en el transporte es un
--- cambio semántico silencioso), y el patrón de la enumeración no lleva
--- ninguno —el punto de `role.app` va como `role[.]app`, que es una clase de
--- caracteres y no un escape—.
+-- Aquí el `replace` literal no sirve: hay que conservar la parte local, y
+-- `hola@role.app` tiene que quedar `hola@role.ec` y no `alguien@role.ec`. Por
+-- eso es un `regexp_replace` con una captura, y por eso el archivo lleva UN
+-- backslash, en `v_new`: el que la captura devuelve. El patrón no lleva
+-- ninguno (el punto va como `role[.]app`, que es una clase de caracteres y no
+-- un escape), y la `i` hace que el dominio, que no distingue mayúsculas, se
+-- reconozca en cualquier caso.
 
 do $mailto$
 declare
-  v_addr text;
-  v_new  text;
+  v_pat constant text := 'mailto:([^@[:space:]"<>]+)@role[.]app';
+  v_new constant text := 'mailto:\1@role.ec';
 begin
-  for v_addr in
-    select distinct unnest(m)
-      from (
-             select c.html_content as cuerpo
-               from public.email_components c
-              where c.deleted_at is null
-             union all
-             select t.body_html as cuerpo
-               from public.email_templates t
-              where t.deleted_at is null
-           ) cuerpos,
-           regexp_matches(cuerpos.cuerpo, 'mailto:[^@[:space:]"<>]+@role[.]app', 'g') m
-  loop
-    v_new := replace(v_addr, '@role.app', '@role.ec');
+  update public.email_templates
+     set body_html = regexp_replace(body_html, v_pat, v_new, 'gi'),
+         updated_at = now()
+   where deleted_at is null
+     and body_html ~* v_pat;
 
-    update public.email_components
-       set html_content = replace(html_content, v_addr, v_new),
-           updated_at = now()
-     where deleted_at is null
-       and strpos(html_content, v_addr) > 0;
-
-    update public.email_templates
-       set body_html = replace(body_html, v_addr, v_new),
-           updated_at = now()
-     where deleted_at is null
-       and strpos(body_html, v_addr) > 0;
-  end loop;
+  update public.email_components
+     set html_content = regexp_replace(html_content, v_pat, v_new, 'gi'),
+         updated_at = now()
+   where deleted_at is null
+     and html_content ~* v_pat;
 end $mailto$;
 
 -- 5. Los banners: `slides.redirect_url`.
@@ -257,10 +292,10 @@ end $mailto$;
 -- una urgencia, y por eso es una bomba cargada. Un banner que alguien
 -- reactiva mañana manda al usuario a un dominio muerto.
 --
--- La condición es el PREFIJO: `redirect_url like 'https://role.app%'`. Un
--- banner que apunte a la web de otro no se toca, y el reemplazo es del mismo
--- prefijo. Un `role.app` que estuviera en otra posición —en un query string,
--- en un camino— tampoco se toca.
+-- La URL tiene que ser NUESTRA: el host, `role.app` o `<sub>.role.app`. Un
+-- banner que apunte a la web de otro no se toca, y tampoco un `role.app` que
+-- sea parte de otra cosa. Los dos `replace` son los mismos de la sección 1, y
+-- por lo mismo que allí no tocan las cuentas sociales.
 --
 -- El barrido cubre TODAS las filas, también las de `deleted_at is not null`:
 -- un enlace es un enlace, y un banner que alguien revive tiene que llevar a
@@ -268,9 +303,10 @@ end $mailto$;
 -- diferencia no se ve.
 
 update public.slides
-   set redirect_url = replace(redirect_url, 'https://role.app', 'https://role.ec'),
+   set redirect_url = replace(replace(redirect_url, '://role.app', '://role.ec'), '.role.app', '.role.ec'),
        updated_at = now()
- where redirect_url like 'https://role.app%';
+ where redirect_url ~ '^[A-Za-z][A-Za-z0-9+.-]*://([^/?#]+[.])?role[.]app([:/?#]|$)'
+   and (redirect_url like '%://role.app%' or redirect_url like '%.role.app%');
 
 -- 6. `notify_business_pending()`: el literal de reserva del panel.
 --
@@ -341,50 +377,43 @@ end $rewrite$;
 
 -- 7. Cerrar la puerta detrás.
 --
--- LA PUERTA TIENE LA FORMA DEL BARRIDO, NO LA DE LA CADENA SUELTA.
+-- LA PUERTA ES EL ESPEJO DE CADA BARRIDO, forma por forma:
 --
--- `role.app` es, además de nuestro dominio viejo, el NOMBRE DE LA CUENTA de la
--- marca en las plataformas de otros: `facebook.com/role.app`,
--- `tiktok.com/@role.app`, `youtube.com/@role.app`. Una puerta que buscara la
--- cadena suelta `role.app` un día se negaría a aplicar esta migración por una
--- cadena que NO es un dominio nuestro, y el motivo del fallo no se vería.
--- El sellado `20260927053728` lo hizo bien: su comprobación miraba
--- `https://role.app` —un host— y no la cadena suelta, y por eso una cuenta
--- social dentro de una plantilla nunca lo habría parado.
---
--- Por eso cada comprobación de aquí mira la FORMA que el barrido de su
--- sección sabe arreglar, y no la cadena suelta:
---
---   - `app_config`: el VALOR DE TEXTO de una clave no social (sección 1). La
---     exención de `social.%` sigue en pie, con su razón.
+--   - `app_config`: la DIRECCIÓN (sección 1a) y la URL con nuestro host
+--     (sección 1b). La exención de `social.%` sigue en pie, con su razón.
 --   - `links.admin_url`: el valor exacto, que es el que la sección 2 siembra
 --     y el que `20260927141336` confirmó. NO está exento: el dominio del
 --     panel está confirmado en `role.ec`, y un archivo que lo exceptuara
 --     afirmaría una conjetura en vez de un hecho.
---   - plantillas y componentes: el HOST `https://role.app` y la DIRECCIÓN
---     `mailto:<local>@role.app` —las dos formas de las secciones 3 y 4—. El
---     patrón de la dirección es el MISMO que usa la sección 4, sin un solo
---     backslash: un `mailto:` con `role.app` es siempre nuestro dominio.
---   - `slides.redirect_url`: el PREFIJO `https://role.app` (sección 5). Un
---     banner que apunte a la web de otro no es cosa nuestra.
+--   - plantillas y componentes: el ENLACE a nuestro host y el `mailto:` a
+--     nuestra dirección (secciones 3 y 4). El patrón de la dirección es el
+--     MISMO que usa la sección 4, con su `i`: un `mailto:` con `role.app` es
+--     siempre nuestro dominio.
+--   - `slides.redirect_url`: la URL con nuestro host (sección 5). Un banner
+--     que apunte a la web de otro no es cosa nuestra.
 --   - `notify_business_pending()`: el LITERAL `https://admin.role.app` (sección
 --     6), que es lo único que esa sección sustituye.
 --
--- `like`, no regex: este archivo se transporta como texto y un backslash
--- perdido en un regex es un cambio semántico silencioso. `like` no tiene nada
--- que escapar. La excepción es el patrón del `mailto:`, que no lleva ningún
--- backslash y que se usa tal cual en el barrido y en la puerta.
+-- `like` y patrones, pero NINGÚN patrón con un backslash: el punto va como
+-- `role[.]app`, que es una clase de caracteres y no un escape. El único
+-- backslash del archivo es el de la captura de la sección 4 —el que devuelve
+-- el grupo capturado—, y hay una prueba de que llega intacto: el `md5sum` del
+-- archivo tiene que coincidir con `md5(statements[1])` del ledger, y el ledger
+-- guarda el SQL con sus bytes. Un backslash perdido en el transporte se vería
+-- ahí, antes de que este archivo quedara sellado.
 
 do $verify$
 declare
   v_leftovers text;
-  v_mailto constant text := 'mailto:[^@[:space:]"<>]+@role[.]app';
+  v_mailto constant text := 'mailto:([^@[:space:]"<>]+)@role[.]app';
 begin
   select string_agg(key, ', ') into v_leftovers
     from public.app_config
    where key not like 'social.%'
      and jsonb_typeof(value) = 'string'
-     and value #>> '{}' like '%role.app%';
+     and ( value #>> '{}' ~ '^[A-Za-z0-9._%+-]+@role[.]app$'
+           or ( value #>> '{}' ~ '^[A-Za-z][A-Za-z0-9+.-]*://([^/?#]+[.])?role[.]app([:/?#]|$)'
+               and (value #>> '{}' like '%://role.app%' or value #>> '{}' like '%.role.app%') ) );
 
   if v_leftovers is not null then
     raise exception 'non-social app_config still references role.app: %', v_leftovers;
@@ -401,9 +430,10 @@ begin
   if exists (
     select 1 from public.email_templates t
      where t.deleted_at is null
-       and (t.body_html like '%https://role.app%'
-            or exists (select 1
-                         from regexp_matches(t.body_html, v_mailto, 'g')))
+       and ( t.body_html like '%://role.app%'
+             or t.body_html like '%.role.app%'
+             or exists (select 1
+                         from regexp_matches(t.body_html, v_mailto, 'gi')) )
   ) then
     raise exception 'an email template still references role.app';
   end if;
@@ -411,15 +441,19 @@ begin
   if exists (
     select 1 from public.email_components c
      where c.deleted_at is null
-       and (c.html_content like '%https://role.app%'
-            or exists (select 1
-                         from regexp_matches(c.html_content, v_mailto, 'g')))
+       and ( c.html_content like '%://role.app%'
+             or c.html_content like '%.role.app%'
+             or exists (select 1
+                         from regexp_matches(c.html_content, v_mailto, 'gi')) )
   ) then
     raise exception 'an email component still references role.app';
   end if;
 
-  if exists (select 1 from public.slides
-              where redirect_url like 'https://role.app%') then
+  if exists (
+    select 1 from public.slides s
+     where s.redirect_url ~ '^[A-Za-z][A-Za-z0-9+.-]*://([^/?#]+[.])?role[.]app([:/?#]|$)'
+       and (s.redirect_url like '%://role.app%' or s.redirect_url like '%.role.app%')
+  ) then
     raise exception 'a slide still redirects to role.app';
   end if;
 
