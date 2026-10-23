@@ -2947,3 +2947,38 @@ nombres de cuenta en dominio ajeno, y reescribirlos rompería cada pie de págin
 **Las dos migraciones anteriores que fallan en un replay siguen fallando**, y
 siguen fallando en su propia aserción —que se dispara antes de la reparación—, así
 que el conjunto de fallos fijado en `apps/api/test/supabase-platform.ts` no cambia.
+
+## Applied: `20261023171300_record_support_phone`
+
+Applied via `apply_migration` on 2026-10-23. The file's `md5sum` is
+`7aa001fddaae2dd6ad44aa329b2c3934` and that is also the ledger's
+`md5(statements[1])`: byte for byte. The round trip was verified — the ledger
+kept the SQL with ONE leading and one trailing newline around the text as
+written, and the file carries exactly those two bytes (the first attempt
+diverged until both were accounted for; nothing else).
+
+**Detalle sellado:** el prólogo del archivo cuenta el agrupamiento del número
+como "tres, tres y cuatro dígitos tras el `+593`"; el correcto es dos, tres y
+cuatro (`+593 98 897 3278`). Es un error de comentario, no de SQL, y el
+archivo queda sellado: editar el prólogo rompería la igualdad con el ledger.
+
+**Qué hace:** pone el teléfono de soporte real del operador (`+593 98 897
+3278`) en la fila `support.phone` de `public.app_config` y le quita a la
+descripción el "(placeholder EC, editable)": el número dejó de ser
+placeholder. `value_type` ('phone'), `is_public` y `active` no cambian, y la
+ida y vuelta demostró que es la ÚNICA fila de `app_config` que la migración
+toca — sólo esa fila comparte la hora del `updated_at`.
+
+**Lo que cambia fuera de la base, en el mismo commit:** el fallback
+`strings.helpCenter.supportPhone` de `apps/mobile`, el placeholder de teléfono
+del formulario de `app-config` del panel y los pins de
+`apps/mobile/src/core/i18n/operator-identity.test.ts` — que ahora fija el
+número real, no el placeholder. El código y su dato dicen lo mismo, o el
+fallback mentiría a un arranque sin red distinto a lo que dice la fila.
+
+**Es la decisión que `docs/security-debt.md` §7 pedía**: una decisión de
+negocio que una migración no podía tomar sola —hasta 2026-10-23 el número
+(`+593 99 000 0000`) era un ejemplo con dígitos en cero y nadie lo atendía—.
+Idempotente y con puerta: un `update` que sólo toca la fila mientras diga el
+valor viejo, y un `do $verify$` que levanta error si la fila no queda con el
+número del operador y `active`.

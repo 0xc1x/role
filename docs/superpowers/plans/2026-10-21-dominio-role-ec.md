@@ -279,7 +279,13 @@ git commit -m "docs(plans): el papel que faltaba, con la evidencia que ya tenía
 | lo que cambió en producción | **SÍ, y es lo que se quería**: el `mailto:hola@role.app` del pie de correo, los tres `slides.redirect_url` inactivos y el literal `'https://admin.role.app'` del trigger. Los valores de `app_config` **no** cambiaron: ya estaban en `role.ec` |
 | el repo dice `role.ec` donde debe | **SÍ** — el sitio (canonical, og:url, sitemap, JSON-LD), los correos de la landing, del móvil y del panel, y el remitente del ejemplo de la API. Quedan en `role.app`: **las cuentas sociales** (dominio ajeno), **las 170 apariciones de las migraciones selladas** (registro histórico), **los fixtures sin valor de dominio** y **la guarda del e2e** de la landing, que afirma que el sitio **no** anuncia el dominio viejo |
 | las acciones de infraestructura | **FUERA del repo, para el partner**: el `VITE_SITE_URL` (o `VERCEL_PROJECT_PRODUCTION_URL`) del despliegue de la landing, el DNS de `role.ec`, las URLs de redirección y los orígenes permitidos del proyecto de Supabase, y el `CORS_ORIGINS` del API si lista el dominio del sitio |
-| el teléfono de soporte | **SIGUE ABIERTO** (`docs/security-debt.md` §7): es una decisión de negocio y no se inventa un número |
+| el teléfono de soporte | **ABIERTO AL CERRAR EL PLAN** (`docs/security-debt.md` §7) — era una decisión de negocio y no se inventa un número |
+
+> (2026-10-23) La fila del teléfono quedó obsoleta ese mismo día: el operador
+> decidió el número (`+593 98 897 3278`) y la migración
+> `20261023171300_record_support_phone.sql` lo registra; el fallback del móvil y
+> el placeholder del panel pasan al mismo valor en el mismo commit. Se anota, no
+> se reescribe: el detalle en `docs/security-debt.md` §7.
 
 ### El commit
 

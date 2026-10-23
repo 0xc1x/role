@@ -1729,7 +1729,7 @@ export const strings = {
 		call: "Llamar",
 		comingSoon: "Próximamente disponible",
 		supportEmail: "soporte@role.ec",
-		supportPhone: "+593 99 000 0000",
+		supportPhone: "+593 98 897 3278",
 		mailSubject: "Contacto - Centro de ayuda",
 		mailError: "No se pudo abrir el cliente de correo",
 		callError: "No se pudo abrir el marcador telefónico",

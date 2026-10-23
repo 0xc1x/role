@@ -31,26 +31,37 @@ y el código el 2026-10-05 (SQL directo y lectura de código; nada inferido).
 > fecha de su propia revisión, y en el índice de arriba sólo se movieron §7 y
 > §8.
 
+> **Qué cambió el 2026-10-23.** El **§7 está cerrado**: el operador tomó la
+> decisión de negocio y publica su teléfono real (`+593 98 897 3278`),
+> y la migración `20261023171300_record_support_phone.sql` lo registra en el
+> ledger (verificada con `md5sum`); el fallback de `strings.ts` y el placeholder
+> del formulario del panel pasan al mismo número en el mismo commit, y el test
+> que fijaba el placeholder ahora fija el número real. **El resto del documento
+> no se re-verificó**: cada sección lleva la fecha de su propia revisión.
+
 ## Estado de los ítems
 
-| # | Ítem | Estado 2026-09-25 | Estado 2026-10-05 | Estado 2026-10-22 |
-| --- | --- | --- | --- | --- |
-| 0 | Migración fuera del ledger | cerrado | cerrado | — sin cambio |
-| 1 | Columnas de negocio expuestas a `anon` | **abierto (P1)** | **cerrado** — fase 3 aplicada | — sin cambio |
-| 1b | Split de `businesses`, fase 3 | "escrita, NO aplicada" | **aplicada** el 2026-09-27 | — sin cambio |
-| 2 | Ocho migraciones nunca ejecutadas | abierto | **cerrado** — 24/24 coinciden | — sin cambio |
-| 3 | Seis migraciones ausentes del repo | deliberado | deliberado (sin cambio) | — sin cambio |
-| 4 | Lint sin cubrir en mobile y commons | abierto | **cerrado** | — sin cambio |
-| 5 | Verificación no posible desde el código | abierto | parcial: correo de activación **cerrado** | — sin cambio |
-| 6 | Acciones de configuración externas | abierto | abierto (reducido) | — sin cambio |
-| 7 | Teléfono de soporte placeholder | — | **abierto, nuevo** | **abierto** — se cerró la parte de los correos |
-| 8 | `app_config` con `role.ec` fuera del ledger | — | **abierto, nuevo** | **cerrado** — reparación aplicada |
+| # | Ítem | Estado 2026-09-25 | Estado 2026-10-05 | Estado 2026-10-22 | Estado 2026-10-23 |
+| --- | --- | --- | --- | --- | --- |
+| 0 | Migración fuera del ledger | cerrado | cerrado | — sin cambio | — sin cambio |
+| 1 | Columnas de negocio expuestas a `anon` | **abierto (P1)** | **cerrado** — fase 3 aplicada | — sin cambio | — sin cambio |
+| 1b | Split de `businesses`, fase 3 | "escrita, NO aplicada" | **aplicada** el 2026-09-27 | — sin cambio | — sin cambio |
+| 2 | Ocho migraciones nunca ejecutadas | abierto | **cerrado** — 24/24 coinciden | — sin cambio | — sin cambio |
+| 3 | Seis migraciones ausentes del repo | deliberado | deliberado (sin cambio) | — sin cambio | — sin cambio |
+| 4 | Lint sin cubrir en mobile y commons | abierto | **cerrado** | — sin cambio | — sin cambio |
+| 5 | Verificación no posible desde el código | abierto | parcial: correo de activación **cerrado** | — sin cambio | — sin cambio |
+| 6 | Acciones de configuración externas | abierto | abierto (reducido) | — sin cambio | — sin cambio |
+| 7 | Teléfono de soporte placeholder | — | **abierto, nuevo** | **abierto** — se cerró la parte de los correos | **cerrado** — el operador decidió el número |
+| 8 | `app_config` con `role.ec` fuera del ledger | — | **abierto, nuevo** | **cerrado** — reparación aplicada | — sin cambio |
 
 Lo único que queda abierto y bloquea el lanzamiento es **§6**. **§8** fue el más
 grave de los nuevos —el repo no podía reproducir la configuración de soporte de
 producción, y una reparación salía de §7 y de §8 a la vez— y **quedó cerrado el
 2026-10-22**: la reparación existe, está aplicada y verificada con `md5sum`.
-De §7 sale el teléfono, que es una decisión de negocio.
+De §7 sale el teléfono, que es una decisión de negocio: **el operador decidió el
+número el 2026-10-23** —`+593 98 897 3278`— y `20261023171300_record_support_phone.sql`
+lo registra en el ledger; el fallback del móvil y el placeholder del panel pasan
+al mismo valor en el mismo commit. El detalle, en §7.
 
 ---
 
@@ -297,9 +308,11 @@ Fuera de la base, y sin forma de verificar desde el repo: bundle ID final,
 filtradas en Supabase, y Turnstile cuando exista frontend y verificación
 server-side.
 
-## 7. Teléfono de soporte: placeholder que se marca (abierto, nuevo)
+## 7. Teléfono de soporte: el operador publica el número real (cerrado el 2026-10-23)
 
-**Estado:** abierto. Agregado por esta revisión el 2026-10-05.
+**Estado:** cerrado el 2026-10-23 —el operador tomó la decisión y la migración
+`20261023171300_record_support_phone.sql` la registra. Agregado por esta
+revisión el 2026-10-05. Lo que sigue describe por qué estaba abierto.
 
 El centro de ayuda de mobile tiene un botón **Llamar** que abre
 `tel:+593 99 000 0000`. Ese número **no existe**: es un placeholder de ejemplo
@@ -325,10 +338,11 @@ quedó **cerrada el 2026-10-22**: los fallbacks de `strings.ts` ya dicen
 dejó un test que los fija (`apps/mobile/src/core/i18n/strings.test.ts`): un
 fallback desalineado ya no puede volver a colarse en silencio.
 
-Hay un test que fija el placeholder:
-`src/core/i18n/operator-identity.test.ts:27` afirma que
+Había, además, un test que fijaba el placeholder:
+`src/core/i18n/operator-identity.test.ts:27` afirmaba que
 `strings.helpCenter.supportPhone` es `+593 99 000 0000`. Cualquier cambio al
-número lo rompe, así que también hay que tocarlo.
+número lo rompería, así que hay que tocarlo con el número — y se tocó: ahora
+fija el real (punto 4 del cierre, abajo).
 
 Un detalle que hace esto más raro de lo que parece: en la misma fila de tres
 chips, "Chat" **sí** avisa "Próximamente disponible" con un toast, y "Llamar"
@@ -339,6 +353,33 @@ existe; el teléfono simplemente no lo usa.
 de soporte. No se puede inventar. Mientras no exista, las opciones son publicarlo
 por `app_config`, ocultar el botón "Llamar", o poner un número que de verdad
 atienda.
+
+**Cómo se cerró (2026-10-23).** El operador tomó la decisión: el teléfono de
+soporte es `+593 98 897 3278` —los mismos dígitos del número que escribió
+("+5939 889 73278"), con el agrupamiento del repo (`+593 98 897 3278`: dos,
+tres y cuatro dígitos tras el `+593`). Va a cuatro lugares, y el cuarto es la
+prueba de que el desalineo no puede volver sin gritar:
+
+1. `app_config.support.phone`, por `20261023171300_record_support_phone.sql`:
+   aplicada por `apply_migration` con nombre `record_support_phone`, versión del
+   servidor `20261023171300`; el `md5sum` del archivo es
+   `7aa001fddaae2dd6ad44aa329b2c3934` y es igual a `md5(statements[1])` del
+   ledger, byte a byte (una ida y vuelta demostró que el ledger guardó el SQL
+   con UN `\n` inicial y otro final, y el archivo quedó con esos dos bytes). La
+   `description` de la fila deja de anunciar "(placeholder EC, editable)": ya no
+   lo es. `value_type` ('phone'), `is_public` y `active` quedaron como estaban.
+2. El fallback `strings.helpCenter.supportPhone` de `src/core/i18n/strings.ts`,
+   que es lo que ve un arranque sin red: mismo número, mismo agrupamiento.
+3. El placeholder de teléfono del formulario de `app-config` del panel
+   (`apps/admin/src/features/app-config/forms/app-config.form.tsx`): el
+   operador ya no lee el número falso en el campo que edita la clave.
+4. `src/core/i18n/operator-identity.test.ts` ya no fija el placeholder: fija el
+   número real. Igual que con los correos del Plan 6, un fallback desalineado
+   vuelve a romper tests.
+
+En la base viva quedó medido después de aplicar: la fila dice el número nuevo
+con `active = true`, y es la ÚNICA fila de `app_config` que la migración tocó
+(sólo esa fila comparte la hora del `updated_at`).
 
 ## 8. `app_config` con `role.ec` que ningún archivo del ledger escribe (cerrado el 2026-10-22)
 
@@ -439,10 +480,12 @@ el dominio viejo, medido el 2026-10-21.
 
 ### Lo que sigue abierto
 
-1. **§7: el teléfono de soporte.** `app_config.support.phone` sigue siendo
-   `+593 99 000 0000` —un número que nadie atiende— y el fallback
-   `strings.helpCenter.supportPhone` dice lo mismo. **No se inventó un
-   número**: es una decisión de negocio, y una migración no puede tomarla.
+1. **§7: el teléfono de soporte — cerrado el 2026-10-23.** Lo que esta fila
+   dejaba abierto era la decisión de negocio ("no se inventó un número"): el
+   operador la tomó ese día, `20261023171300_record_support_phone.sql` la
+   registra en el ledger y el código (fallback del móvil, placeholder del
+   panel, pins del test) quedó alineado en el mismo commit. Lo que movió y
+   cómo quedó medido, en §7.
 2. **Las dos migraciones que fallan en un replay siguen fallando, y en el
    mismo punto.** `20260927053728` y `20260927141336` abortan en su **propia**
    aserción —la que dice que ninguna clave no social puede decir `role.app`—, y

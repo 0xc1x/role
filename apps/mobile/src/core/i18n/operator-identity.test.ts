@@ -23,15 +23,15 @@ describe("operator identity from app_config", () => {
 		);
 	});
 
-	test("support phone fallback is EC placeholder", () => {
-		expect(strings.helpCenter.supportPhone).toBe("+593 99 000 0000");
+	test("support phone fallback is the operator phone", () => {
+		expect(strings.helpCenter.supportPhone).toBe("+593 98 897 3278");
 	});
 
 	test("fallback never blocks without config data", () => {
 		// Sin datos de config (offline / is_public=false) devuelve el fallback.
 		expect(getConfigValue(undefined, "legal.ruc", "")).toBe("");
-		expect(getConfigValue(undefined, "support.phone", "+593 99 000 0000")).toBe(
-			"+593 99 000 0000",
+		expect(getConfigValue(undefined, "support.phone", "+593 98 897 3278")).toBe(
+			"+593 98 897 3278",
 		);
 	});
 

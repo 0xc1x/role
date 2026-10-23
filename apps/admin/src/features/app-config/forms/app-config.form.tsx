@@ -488,7 +488,7 @@ function TextValueInput({
 						: valueType === "url"
 							? "https://..."
 							: valueType === "phone"
-								? "+593 99 000 0000"
+								? "+593 98 897 3278"
 								: "Valor de configuración"
 				}
 				step="any"
