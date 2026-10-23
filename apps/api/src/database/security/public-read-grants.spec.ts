@@ -789,7 +789,8 @@ describe('businesses column split phase 3 closes the anon exposure', () => {
   // Resolved by suffix, not by a hardcoded version. The Supabase server assigns
   // the migration version, so the filename differs per environment: pinning
   // `20260926000011_...` made this whole block fail with ENOENT the moment the
-  // migration was actually applied and renamed to its recorded version.
+  // migration was actually applied and renamed to its recorded version
+  // (currently `20260927025753_businesses_drop_sensitive_columns.sql`).
   const PHASE3_FILE = readdirSync(MIGRATIONS_DIR).find((f) =>
     f.endsWith('_businesses_drop_sensitive_columns.sql'),
   );

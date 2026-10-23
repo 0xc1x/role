@@ -1,0 +1,17 @@
+{
+  "build": {
+    "development": {
+      "channel": "development",
+      "env": { "EXPO_PUBLIC_ENVIRONMENT": "development" }
+    },
+    "preview": {
+      "channel": "preview",
+      "distribution": "internal",
+      "env": { "EXPO_PUBLIC_ENVIRONMENT": "preview" }
+    },
+    "production": {
+      "channel": "production",
+      "env": { "EXPO_PUBLIC_ENVIRONMENT": "production" }
+    }
+  }
+}

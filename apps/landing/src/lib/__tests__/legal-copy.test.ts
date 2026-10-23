@@ -22,6 +22,7 @@ describe("legal copy accuracy", () => {
 
 		expect(privacyCopy).not.toContain("1799999999001");
 		expect(termsCopy).not.toContain("1799999999001");
+		expect(privacyCopy).not.toContain("+52");
 		expect(privacyCopy).toContain("{controllerIdentity}");
 		expect(termsCopy).toContain("{controllerIdentity}");
 		expect(privacyCopy).not.toContain("eliminar o exportar");
