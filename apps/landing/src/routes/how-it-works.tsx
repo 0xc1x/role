@@ -120,7 +120,7 @@ function HowItWorksPage() {
 						<p className="text-sm font-semibold uppercase tracking-widest text-role-secondary reveal">
 							Guía rápida
 						</p>
-						<h1 className="mt-4 font-heading text-4xl font-bold leading-[1.05] tracking-tight md:text-6xl reveal reveal-delay-1">
+						<h1 className="mt-4 font-heading text-4xl font-bold leading-[1.05] tracking-tight md:text-8xl reveal reveal-delay-1">
 							¿Cómo funciona Rolé?
 						</h1>
 						<p className="mt-6 max-w-xl text-lg leading-relaxed text-white/75 reveal reveal-delay-2">
@@ -148,7 +148,7 @@ function HowItWorksPage() {
 				<section className="mx-auto max-w-5xl px-6 py-24 md:py-32">
 					<div className="mb-16 max-w-2xl reveal">
 						<Eyebrow>El proceso</Eyebrow>
-						<h2 className="max-w-2xl font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
+						<h2 className="max-w-2xl font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-8xl">
 							Tres pasos. Menos de dos minutos.
 						</h2>
 					</div>
@@ -185,7 +185,7 @@ function HowItWorksPage() {
 					<div className="mx-auto max-w-5xl">
 						<div className="mb-16 max-w-2xl reveal">
 							<Eyebrow>Por qué vale la pena</Eyebrow>
-							<h2 className="max-w-2xl font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
+							<h2 className="max-w-2xl font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-8xl">
 								Bueno para tu bolsillo. Bueno para el planeta.
 							</h2>
 						</div>
@@ -217,7 +217,7 @@ function HowItWorksPage() {
 				<section className="mx-auto max-w-3xl px-6 py-24 md:py-32">
 					<div className="mb-12 reveal">
 						<Eyebrow>Dudas frecuentes</Eyebrow>
-						<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl">
+						<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-8xl">
 							Lo que más nos preguntan
 						</h2>
 					</div>

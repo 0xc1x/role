@@ -13,7 +13,7 @@ export function Faq() {
 			<div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr]">
 				<div className="reveal">
 					<Eyebrow>Preguntas</Eyebrow>
-					<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl">
+					<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-8xl">
 						Antes de escribirnos.
 					</h2>
 				</div>

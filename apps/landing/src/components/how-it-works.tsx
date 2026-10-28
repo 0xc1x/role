@@ -25,7 +25,7 @@ export function HowItWorks() {
 		<Section id="como-funciona">
 			<div className="reveal">
 				<Eyebrow>Cómo funciona</Eyebrow>
-				<h2 className="max-w-2xl font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
+				<h2 className="max-w-2xl font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-8xl">
 					Del excedente del comercio a tu mesa
 				</h2>
 			</div>

@@ -141,7 +141,7 @@ function HelpCenterPage() {
 					<HeroBackground />
 					<div className="relative mx-auto max-w-4xl">
 						<Eyebrow>Ayuda</Eyebrow>
-						<h1 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
+						<h1 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-8xl">
 							Centro de ayuda
 						</h1>
 						<p className="mt-4 max-w-md text-base leading-relaxed reveal reveal-delay-2">
@@ -160,7 +160,7 @@ function HelpCenterPage() {
 									key={cat.title}
 									className={`reveal reveal-delay-${catIdx + 1}`}
 								>
-									<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl">
+									<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-6xl">
 										{cat.title}
 									</h2>
 									<Accordion className="space-y-0">
@@ -186,7 +186,7 @@ function HelpCenterPage() {
 					<div className="mx-auto max-w-3xl">
 						<div className="mb-12 text-center reveal">
 							<Eyebrow>¿Aún necesitas ayuda?</Eyebrow>
-							<h2 className="max-w-2xl font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
+							<h2 className="max-w-2xl font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-8xl">
 								Habla con nosotros
 							</h2>
 							<p className="mx-auto mt-4 max-w-md text-lg text-role-muted-foreground">

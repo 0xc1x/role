@@ -91,7 +91,7 @@ export function Cta({
 					) : null}
 
 					<h2
-						className={`font-heading text-3xl font-bold tracking-tight md:text-5xl ${styles.heading}`}
+						className={`font-heading text-3xl font-bold tracking-tight md:text-8xl ${styles.heading}`}
 					>
 						{title}
 					</h2>

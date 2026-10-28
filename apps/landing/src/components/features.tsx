@@ -32,9 +32,9 @@ const FEATURES = [
 export function Features() {
 	return (
 		<Section id="caracteristicas" tone="cream">
-			<div className="max-w-2xl reveal">
+			<div className="max-w-3xl reveal">
 				<Eyebrow>Por qué Rolé</Eyebrow>
-				<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
+				<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-8xl">
 					Bueno para tu bolsillo, bueno para el planeta.
 				</h2>
 				<p className="mt-4 max-w-md text-base leading-relaxed text-ink-soft">

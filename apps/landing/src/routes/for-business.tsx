@@ -120,7 +120,7 @@ function ForBusinessPage() {
 							<p className="text-sm font-semibold uppercase tracking-widest text-role-secondary reveal">
 								Para negocios
 							</p>
-							<h1 className="mt-4 font-heading text-4xl font-bold leading-[1.05] tracking-tight md:text-6xl reveal reveal-delay-1">
+							<h1 className="mt-4 font-heading text-4xl font-bold leading-[1.05] tracking-tight md:text-8xl reveal reveal-delay-1">
 								{"Convierte tu excedente en "}
 								<span className="editorial italic font-normal text-role-secondary">
 									ingresos.
@@ -180,7 +180,7 @@ function ForBusinessPage() {
 				<section className="mx-auto max-w-5xl px-6 py-24 md:py-32">
 					<div className="mb-16 max-w-2xl reveal">
 						<Eyebrow>Por qué unirte</Eyebrow>
-						<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
+						<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-8xl">
 							Cuatro razones para estar en Rolé
 						</h2>
 					</div>
@@ -209,7 +209,7 @@ function ForBusinessPage() {
 					<div className="mx-auto max-w-5xl">
 						<div className="mb-16 max-w-2xl reveal">
 							<Eyebrow>Cómo empezar</Eyebrow>
-							<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
+							<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-8xl">
 								Del registro a tu primera venta
 							</h2>
 							<p className="mt-4 max-w-lg text-lg text-role-muted-foreground">

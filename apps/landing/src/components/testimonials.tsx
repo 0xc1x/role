@@ -31,7 +31,7 @@ export function Testimonials() {
 		<Section id="historias">
 			<div className="max-w-2xl reveal">
 				<Eyebrow>Historias</Eyebrow>
-				<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
+				<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-8xl">
 					Quien opera, no quien opina.
 				</h2>
 			</div>

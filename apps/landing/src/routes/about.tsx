@@ -80,7 +80,7 @@ function AboutPage() {
 					<HeroBackground />
 					<div className="relative mx-auto max-w-4xl">
 						<Eyebrow>Sobre nosotros</Eyebrow>
-						<h1 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
+						<h1 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-8xl">
 							La comida deliciosa no debería{" "}
 							<span className="font-display italic font-normal text-role-secondary">
 								terminar en la basura.
@@ -98,7 +98,7 @@ function AboutPage() {
 				<section className="mx-auto max-w-3xl px-6 py-24 md:py-32">
 					<div className="space-y-16">
 						<div className="reveal">
-							<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
+							<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-8xl">
 								La idea
 							</h2>
 							<p className="mt-4 leading-relaxed text-role-muted-foreground">
@@ -112,7 +112,7 @@ function AboutPage() {
 						</div>
 
 						<div className="reveal reveal-delay-1">
-							<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
+							<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-8xl">
 								La misión
 							</h2>
 							<p className="mt-4 leading-relaxed text-role-muted-foreground">
@@ -125,7 +125,7 @@ function AboutPage() {
 						</div>
 
 						<div className="reveal reveal-delay-2">
-							<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
+							<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-8xl">
 								Cómo funciona
 							</h2>
 							<p className="mt-4 leading-relaxed text-role-muted-foreground">
@@ -150,7 +150,7 @@ function AboutPage() {
 					<div className="mx-auto max-w-4xl">
 						<div className="mb-12 max-w-2xl reveal">
 							<Eyebrow>El impacto hasta hoy</Eyebrow>
-							<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
+							<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-8xl">
 								Números que cuentan
 							</h2>
 						</div>
@@ -179,7 +179,7 @@ function AboutPage() {
 				<section className="mx-auto max-w-4xl px-6 py-24 md:py-32">
 					<div className="mb-16 max-w-2xl reveal">
 						<Eyebrow>Lo que nos guía</Eyebrow>
-						<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
+						<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-8xl">
 							Cuatro principios
 						</h2>
 					</div>
@@ -214,7 +214,7 @@ function AboutPage() {
 							<div className="absolute -bottom-32 -right-16 h-96 w-96 rounded-full bg-role-primary-deep/70 blur-3xl" />
 						</div>
 						<div className="relative reveal">
-							<h2 className="font-heading text-3xl font-bold tracking-tight md:text-4xl">
+							<h2 className="font-heading text-3xl font-bold tracking-tight md:text-8xl">
 								Únete a Rolé
 							</h2>
 							<p className="mx-auto mt-4 max-w-lg text-lg text-white/85">

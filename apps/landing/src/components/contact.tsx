@@ -149,7 +149,7 @@ export function Contact() {
 			<div className="grid items-start gap-12 lg:grid-cols-[1fr_1fr]">
 				<div className="reveal">
 					<Eyebrow className="text-cream/70">Hablemos</Eyebrow>
-					<h2 className="font-display text-3xl font-medium tracking-[-0.03em] text-cream sm:text-4xl md:text-5xl">
+					<h2 className="font-display text-3xl font-medium tracking-[-0.03em] text-cream sm:text-4xl md:text-8xl">
 						{copy.title}
 					</h2>
 					<p className="mt-4 max-w-md text-base leading-relaxed text-cream/80">

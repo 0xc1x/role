@@ -191,8 +191,8 @@ export function Hero({
 			</div>
 
 			{/* Main content */}
-			<div className="relative mx-auto max-w-6xl px-6 py-25 lg:py-35 z-10">
-				<div className="max-w-2xl space-y-8">
+			<div className="relative max-w-7xl px-24 py-25 lg:py-35 z-10">
+				<div className="max-w-3xl space-y-8">
 					{/* Badge */}
 					{/* <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.06] px-4 py-1.5 text-sm font-medium backdrop-blur reveal">
 						<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-role-secondary" />
@@ -200,7 +200,7 @@ export function Hero({
 					</p> */}
 
 					{/* Display headline with editorial serif span */}
-					<h1 className="max-w-2xl font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
+					<h1 className="max-w-4xl font-display text-6xl font-medium tracking-[-0.03em] sm:text-6xl md:text-8xl">
 						<span className="editorial italic font-normal text-role-secondary">
 							La comida que sobra no tiene que perderse.
 						</span>
