@@ -96,6 +96,18 @@ export default defineConfig({
 			// network call.
 			EXPO_PUBLIC_SUPABASE_URL: "https://test.supabase.co",
 			EXPO_PUBLIC_SUPABASE_ANON_KEY: "test-anon-key",
+			// The API BFF is NOT stubbed here (per ADR-0002 the app talks to
+			// Supabase directly; the API is an admin-panel concern). So its URL
+			// has to be empty, exactly the app's own default
+			// (`src/core/config/env.ts`), to make every API call throw instantly
+			// instead of leaving the request hanging. A local `.env` that sets a
+			// real URL would leak into the bundle (Expo inlines EXPO_PUBLIC_*
+			// at build time) and stall the consumer login, whose
+			// `signInWithEmail` awaits `stampStaffSession()`: the request escapes
+			// to the network and the 5 s shell wait times out on a machine that
+			// is fine. Pinning it keeps the suite hermetic regardless of the
+			// developer's `.env`.
+			EXPO_PUBLIC_API_URL: "",
 			// The bundle is rebuilt on every run; a browser cache from the
 			// previous one would test the previous one.
 			EXPO_NO_TELEMETRY: "1",
