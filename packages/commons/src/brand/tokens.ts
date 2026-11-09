@@ -19,4 +19,4 @@ export const BRAND_SPLASH_BACKGROUND = BRAND_PRIMARY_DARK;
  * links in `apps/admin` and `apps/landing` (`?v=N`). Bump it inside `brand:sync`
  * whenever generated assets change so browsers fetch the new artwork.
  */
-export const BRAND_ASSET_VERSION = 11;
+export const BRAND_ASSET_VERSION = 12;

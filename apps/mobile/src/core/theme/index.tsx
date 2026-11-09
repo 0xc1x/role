@@ -13,6 +13,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SystemUI from "expo-system-ui";
 
 import { colorTokens, type ColorTokens, type ThemeScheme } from "./colors";
+import { pageChrome } from "./page-chrome";
 export { colorTokens, light, dark } from "./colors";
 
 export type ThemeMode = "light" | "dark" | "system";
@@ -74,6 +75,9 @@ export function ThemeProvider({
 			"--page-background",
 			colorTokens[resolved].background,
 		);
+		// Y el chrome del navegador (safe areas): solo corrige el meta
+		// después del hand-off del boot splash (ver page-chrome.ts).
+		pageChrome.sync(resolved);
 	}, [mode, systemScheme]);
 
 	const setMode = useCallback((next: ThemeMode) => {

@@ -76,6 +76,16 @@ describe("PWA web shell", () => {
 		);
 	});
 
+	test("hands the browser chrome off after the boot splash", () => {
+		// The static meta is the launch canvas colour: it paints the bars
+		// while the splash is up, and page chrome switches it to the theme
+		// background only when the app is revealed (page-chrome hand-off).
+		expect(shell).toMatch(
+			/<meta name="theme-color" content="#271338" \/>/,
+		);
+		expect(themeSource).toContain("pageChrome.sync(resolved);");
+	});
+
 	test("uses the validated overlap only for the iOS standalone web marker", () => {
 		expect(IOS_PWA_NAVBAR_OVERLAP).toBe(30);
 		expect(getIosPwaNavbarOverlap("web", htmlDocument("true"))).toBe(

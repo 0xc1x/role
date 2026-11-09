@@ -49,6 +49,7 @@ if (Platform.OS === "web") {
 }
 import "../global.css";
 import { ThemeProvider, useTheme } from "@/src/core/theme";
+import { pageChrome } from "@/src/core/theme/page-chrome";
 import { LoadingView } from "@/src/core/ui";
 import { decideSharedRoute } from "@/src/core/routing/shared-routes";
 import { queryClient } from "@/src/core/query/client";
@@ -187,6 +188,9 @@ function RootLayout() {
 				}, 30);
 				window.setTimeout(() => el.remove(), 350);
 			}
+			// La app ya es visible: el chrome del navegador pasa del color del
+			// splash (morado) al fondo del tema resuelto (ver page-chrome.ts).
+			pageChrome.begin();
 		}
 		void SplashScreen.hideAsync();
 	}, [splashReady]);
