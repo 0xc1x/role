@@ -101,9 +101,7 @@ export const randomOfferQueryOptions = queryOptions({
 		if (raw === null) return null;
 		const parsed = OfferWithBusinessSchema.safeParse(raw);
 		if (!parsed.success) {
-			const rutas = parsed.error.issues
-				.map((i) => i.path.join("."))
-				.join(", ");
+			const rutas = parsed.error.issues.map((i) => i.path.join(".")).join(", ");
 			throw new Error(`oferta inválida: ${rutas}`);
 		}
 		const data: OfferWithBusiness = parsed.data;

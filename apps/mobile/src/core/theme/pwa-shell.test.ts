@@ -80,9 +80,7 @@ describe("PWA web shell", () => {
 		// The static meta is the launch canvas colour: it paints the bars
 		// while the splash is up, and page chrome switches it to the theme
 		// background only when the app is revealed (page-chrome hand-off).
-		expect(shell).toMatch(
-			/<meta name="theme-color" content="#271338" \/>/,
-		);
+		expect(shell).toMatch(/<meta name="theme-color" content="#271338" \/>/);
 		expect(themeSource).toContain("pageChrome.sync(resolved);");
 	});
 

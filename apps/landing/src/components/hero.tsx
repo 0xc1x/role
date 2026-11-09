@@ -249,10 +249,7 @@ export function Hero({
 					    la animación no se veía: el ojo la capturaba cuando ya había
 					    terminado. Las cifras son contenido, no decoración, y no
 					    deben depender de una animación para poder leerse. */}
-					<dl
-						data-stats-source={stats.source}
-						className="flex items-stretch"
-					>
+					<dl data-stats-source={stats.source} className="flex items-stretch">
 						{STATS.map((s, idx) => (
 							<div key={s.label} className="flex items-stretch">
 								<div

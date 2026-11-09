@@ -22,7 +22,10 @@ export class NotificationJobs {
   private async guarded(key: string, fn: () => Promise<void>): Promise<void> {
     if (!this.isEnabled()) return;
     if (this.running.has(key)) {
-      this.logger.debug({ event: 'notification_job_overlap_skipped', job: key });
+      this.logger.debug({
+        event: 'notification_job_overlap_skipped',
+        job: key,
+      });
       return;
     }
     this.running.add(key);

@@ -23,7 +23,8 @@ import { getRequestContext } from './request-context';
  * de la defensa descrita en `packages/commons/src/_common/utils/safe-error.ts`:
  * si mañana alguien loguea un error crudo, la línea sale acotada igual.
  */
-export type JsonLogLevel = 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'verbose';
+export type JsonLogLevel =
+  'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'verbose';
 
 /** Nivel configurable por `LOG_LEVEL`. Mismo vocabulario que emite. */
 export type JsonLogLevelOption = JsonLogLevel | 'log';
@@ -64,9 +65,7 @@ export interface JsonLoggerOptions {
 }
 
 function isPlainObject(value: unknown): value is LogRecord {
-  return (
-    typeof value === 'object' && value !== null && !Array.isArray(value)
-  );
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function defaultSink(line: string, stream: 'stdout' | 'stderr'): void {
@@ -94,9 +93,11 @@ function toFields(message: unknown): LogRecord {
  * Separa `context` (último string, por convención de Nest) del resto, y recoge
  * en `extras` los objetos adicionales que aporta el call site.
  */
-function splitParams(
-  params: readonly unknown[],
-): { context?: string; extras: LogRecord; messages: string[] } {
+function splitParams(params: readonly unknown[]): {
+  context?: string;
+  extras: LogRecord;
+  messages: string[];
+} {
   const rest = [...params];
   let context: string | undefined;
   const last = rest[rest.length - 1];

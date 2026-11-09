@@ -53,7 +53,9 @@ export function createPageChrome({
 
 	function apply(content: string) {
 		if (!doc) return;
-		doc.querySelector('meta[name="theme-color"]')?.setAttribute("content", content);
+		doc
+			.querySelector('meta[name="theme-color"]')
+			?.setAttribute("content", content);
 	}
 
 	return {

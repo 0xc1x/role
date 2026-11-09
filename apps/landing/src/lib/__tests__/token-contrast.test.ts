@@ -70,7 +70,7 @@ describe("hero de /for-business: los proof numbers sobre el fondo oscuro", () =>
 		expect(before).toBeLessThan(AA_LARGE_AND_UI);
 		expect(after).toBeGreaterThanOrEqual(AA_TEXT);
 		// 1.10:1 -> 12.40:1. Si el segundo número cambia, el arreglo se movió.
-		expect(before).toBeCloseTo(1.10, 1);
+		expect(before).toBeCloseTo(1.1, 1);
 		expect(after).toBeCloseTo(12.4, 1);
 	});
 

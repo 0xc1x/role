@@ -172,11 +172,7 @@ function plainRows<T>(result: unknown): T[] {
  * escondido en esa línea seguiría viéndose.
  */
 function codigoDe(source: string): string {
-  return (
-    source
-      .replace(/--[^\n]*/g, ' ')
-      .replace(/'(?:[^']|'')*'/g, "''")
-  );
+  return source.replace(/--[^\n]*/g, ' ').replace(/'(?:[^']|'')*'/g, "''");
 }
 
 /**
@@ -280,10 +276,7 @@ async function rolledBackAttempts(
 
   try {
     await ctx.sql.begin(async (tx) => {
-      const attempt = async (
-        label: string,
-        sql: string,
-      ): Promise<Attempt> => {
+      const attempt = async (label: string, sql: string): Promise<Attempt> => {
         try {
           await tx.savepoint(async (sp) => {
             await sp.unsafe(sql);

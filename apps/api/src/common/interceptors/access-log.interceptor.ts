@@ -35,10 +35,7 @@ type RequestWithUser = Request & { user?: AuthUser };
 export class AccessLogInterceptor implements NestInterceptor {
   private readonly logger = new Logger('AccessLog');
 
-  intercept(
-    context: ExecutionContext,
-    next: CallHandler,
-  ): Observable<unknown> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const http = context.switchToHttp();
     const request = http.getRequest<RequestWithUser>();
     const response = http.getResponse<Response>();

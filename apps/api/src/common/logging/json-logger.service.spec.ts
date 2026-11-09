@@ -225,7 +225,10 @@ describe('JsonLoggerService', () => {
 
       logger.log({ event: 'x' }, 'OffersService');
 
-      expect(out.parse()).toMatchObject({ event: 'x', context: 'OffersService' });
+      expect(out.parse()).toMatchObject({
+        event: 'x',
+        context: 'OffersService',
+      });
     });
   });
 
@@ -240,7 +243,10 @@ describe('JsonLoggerService', () => {
       logger.debug({ event: 'd' });
       logger.verbose({ event: 'v' });
 
-      expect(out.lines.map((l) => JSON.parse(l.line).event)).toEqual(['e', 'w']);
+      expect(out.lines.map((l) => JSON.parse(l.line).event)).toEqual([
+        'e',
+        'w',
+      ]);
     });
 
     it('por defecto sale `info` (los eventos de negocio) y no `debug`', () => {

@@ -119,13 +119,13 @@ async function bootstrap() {
   app.enableShutdownHooks();
   await app.listen(port);
   // Una sola línea estructurada: las tres URLs quedan como campos buscables en
-// vez de tres mensajes que un agregador no puede agrupar.
-new Logger('Bootstrap').log({
-  event: 'api_ready',
-  port,
-  docsPath: '/docs',
-  healthPath: '/api/v1/health',
-});
+  // vez de tres mensajes que un agregador no puede agrupar.
+  new Logger('Bootstrap').log({
+    event: 'api_ready',
+    port,
+    docsPath: '/docs',
+    healthPath: '/api/v1/health',
+  });
 }
 
 // Sin este catch, un fallo en `validateEnv` — que lanza nombrando la variable

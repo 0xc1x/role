@@ -150,11 +150,9 @@ describe('AllExceptionsFilter', () => {
     );
 
     const logged = logWarn.mock.calls[0]?.[0] as
-      | Record<string, unknown>
-      | undefined;
+      Record<string, unknown> | undefined;
     const body = response.json.mock.calls[0]?.[0] as
-      | Record<string, unknown>
-      | undefined;
+      Record<string, unknown> | undefined;
 
     expect(body?.requestId).toBe(middlewareId);
     expect(logged?.requestId).toBe(middlewareId);

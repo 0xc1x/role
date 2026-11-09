@@ -529,9 +529,7 @@ describe("el montaje en la landing", () => {
 		// `loaderData` es un local —la ruta lee los dos resultados del loader de una
 		// vez— así que la aserción busca el hook recibiendo SU campo, no la forma
 		// literal de la llamada.
-		expect(ruta).toMatch(
-			/useAnnouncements\(\s*loaderData\.announcements\s*\)/,
-		);
+		expect(ruta).toMatch(/useAnnouncements\(\s*loaderData\.announcements\s*\)/);
 		expect(ruta).not.toMatch(/useAnnouncements\(\s*\)/);
 		// Las stats siguen el mismo contrato que los avisos: el loader las
 		// devuelve y el Hero las recibe, por el mismo motivo que está documentado

@@ -54,11 +54,9 @@ function scenario(options: Scenario) {
  */
 function harness(options: Scenario) {
   const logged: { level: 'log' | 'debug'; fields: Captured }[] = [];
-  jest
-    .spyOn(Logger.prototype, 'log')
-    .mockImplementation((fields: Captured) => {
-      logged.push({ level: 'log', fields });
-    });
+  jest.spyOn(Logger.prototype, 'log').mockImplementation((fields: Captured) => {
+    logged.push({ level: 'log', fields });
+  });
   jest
     .spyOn(Logger.prototype, 'debug')
     .mockImplementation((fields: Captured) => {
@@ -230,7 +228,10 @@ describe('AccessLogInterceptor sin contexto activo', () => {
     const interceptor = new AccessLogInterceptor();
     const context = {
       switchToHttp: () => ({
-        getRequest: () => ({ method: 'GET', route: { path: '/api/v1/offers' } }),
+        getRequest: () => ({
+          method: 'GET',
+          route: { path: '/api/v1/offers' },
+        }),
         getResponse: () => ({ statusCode: 200 }),
       }),
     } as unknown as ExecutionContext;
