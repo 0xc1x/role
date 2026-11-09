@@ -14,16 +14,28 @@ import { expect, getServedHtml, gotoHydrated, test } from "./fixtures";
  * route mounts it.
  */
 const CONTENT_ROUTES = [
-	{ path: "/about", h1: "La comida deliciosa no debería", title: "Sobre Rolé" },
+	{
+		path: "/about",
+		h1: "La comida deliciosa no debería",
+		title: "Sobre Rolé | Marketplace de comida excedente",
+	},
 	{ path: "/terms", h1: "Términos y", title: "Términos | Rolé" },
 	{ path: "/privacy", h1: "Política de", title: "Privacidad | Rolé" },
 	{
 		path: "/how-it-works",
 		h1: "¿Cómo funciona Rolé?",
-		title: "Cómo funciona Rolé",
+		title: "Cómo funciona Rolé | App de comida excedente",
 	},
-	{ path: "/help-center", h1: "Centro de ayuda", title: "Centro de ayuda | Rolé" },
-	{ path: "/for-business", h1: "Convierte tu excedente en", title: "Rolé para negocios" },
+	{
+		path: "/help-center",
+		h1: "Centro de ayuda",
+		title: "Centro de ayuda | App de comida excedente",
+	},
+	{
+		path: "/for-business",
+		h1: "Convierte tu excedente en",
+		title: "Rolé para negocios | Vende tu comida excedente",
+	},
 ] as const;
 
 test.describe("content routes render server-side", () => {
