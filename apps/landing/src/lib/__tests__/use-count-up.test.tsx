@@ -95,6 +95,12 @@ describe("useCountUp sin movimiento reducido", () => {
 	test("si el valor cambia, arranca un conteo nuevo", () => {
 		const restore = stubMatchMedia();
 		setReducedMotion(false);
+		// Sin rAF el hook salta directo al valor final; con el global de otro
+		// spec (el reloj falso de use-count-up-animation) animaría y el valor
+		// inmediato sería el anterior. Se fija el ambiente, no se negocia con él.
+		const raf = globalThis.requestAnimationFrame;
+		globalThis.requestAnimationFrame =
+			undefined as unknown as typeof requestAnimationFrame;
 		try {
 			const { result, rerender } = renderHook(
 				({ value }: { value: number | undefined }) => useCountUp(value),
@@ -104,6 +110,7 @@ describe("useCountUp sin movimiento reducido", () => {
 			rerender({ value: 45 });
 			expect(result.current).toBe(45);
 		} finally {
+			globalThis.requestAnimationFrame = raf;
 			teardownMotion();
 			restore();
 			cleanup();
