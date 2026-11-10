@@ -121,7 +121,19 @@ async function startStorageStub() {
         // cerrara por su cuenta —una espera de segundos en el `afterAll` que
         // no es un fallo pero parece uno.
         server.closeAllConnections();
-        server.close((err) => (err ? reject(err) : resolve()));
+        server.close((err) => {
+          // Bun 1.4.0 (el packageManager del repo) ya deja el server cerrado
+          // en `closeAllConnections()` y el `close()` siguiente responde
+          // ERR_SERVER_NOT_RUNNING. Es el mismo estado final, no un fallo.
+          if (
+            err &&
+            (err as NodeJS.ErrnoException).code !== 'ERR_SERVER_NOT_RUNNING'
+          ) {
+            reject(err);
+            return;
+          }
+          resolve();
+        });
       }),
   };
 }
